@@ -27,3 +27,19 @@ La fenêtre **Add Equipment** permet de choisir un type d’équipement, une sta
 ## Limites
 
 Les données affichées sont des exemples. Les équipements ajoutés restent en mémoire pendant l’exécution et disparaissent à la fermeture. Il n’y a pas de base de données, d’authentification ni de backend. La recherche, les filtres, l’export PDF et les autres commandes de navigation sont des éléments d’interface de démonstration.
+
+## Gestion Staff
+
+Le module Staff de Donia se trouve dans `staff/`. Ouvrir **`staff/SkySense.pro`**
+dans Qt Creator avec le kit **Desktop Qt 6.7.3 MinGW 64-bit**, puis compiler
+et exécuter. Le projet `SkySense.pro` à la racine continue d'ouvrir Equipment.
+
+Staff reprend le projet fourni et ses dimensions de 1646 × 932. Il comprend
+la recherche, les filtres, la pagination, l'ajout et la modification de membres,
+la gestion de leurs droits dans la démonstration et l'export PDF. Les données
+restent en mémoire ; les autres modules ne sont pas raccordés à cette fenêtre.
+Les points décoratifs rouge, jaune et vert ont été retirés de l'écran Staff.
+
+Voir [`staff/README.txt`](staff/README.txt) pour les fonctions et les limites,
+et [`staff/VERIFICATION.txt`](staff/VERIFICATION.txt) pour la validation.
+Les tests Qt Test se compilent séparément avec `staff/tests/staff_tests.pro`.

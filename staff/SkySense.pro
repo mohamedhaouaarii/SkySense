@@ -1,0 +1,9 @@
+QT += core gui widgets printsupport
+CONFIG += c++17
+TEMPLATE = app
+TARGET = SkySense_Staff_Matched
+SOURCES += main.cpp skysensewindow.cpp staffui.cpp
+HEADERS += skysensewindow.h staffui.h
+FORMS += skysensewindow.ui
+RESOURCES += resources.qrc
+win32-msvc*:QMAKE_CXXFLAGS += /utf-8

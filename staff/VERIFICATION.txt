@@ -1,0 +1,33 @@
+Vérification effectuée le 1 octobre 2026
+
+Compilation Release : Qt 6.7.3 / MinGW 11.2 64-bit, réussie.
+Rendu : capture réelle des widgets Qt avec le moteur Windows.
+Taille de la capture : 1646 × 932 pixels, hors cadre Windows.
+Inspection visuelle du tableau, de l'en-tête et du panneau inférieur effectuée.
+
+Qt Test : 10 résultats réussis, 0 échec (8 scénarios + initialisation/nettoyage).
+Projet de tests : tests/staff_tests.pro.
+
+Scénarios :
+- état initial, absence des points décoratifs, badge sans chevauchement,
+  conservation des proportions à 1100 × 700 ;
+- recherche sans distinction de casse, espaces superflus, état vide,
+  pagination, filtres et synchronisation des deux listes de rôles ;
+- clics sur les cases dessinées, touche Espace, sélection globale ;
+- ajout et édition, nom obligatoire, email valide et unique,
+  rôle et département obligatoires, espaces de début/fin retirés ;
+- annulation d'un formulaire sans modification du membre ;
+- modification et conservation des droits, changement d'onglet ;
+- textes longs sans dépassement, texte complet en infobulle ;
+- export depuis le bouton PDF avec un filtre actif : ouverture de la boîte
+  de dialogue, sauvegarde et vérification de la signature du fichier PDF.
+
+Compilation de l'application et des tests : sans avertissement ni erreur.
+Exécution et capture de l'application : code de sortie 0.
+Diff local relu ; les modules autres que Staff n'ont pas été modifiés.
+
+Intégration Git : dossier staff/ sur la branche gestion-staff, issue de la
+branche par défaut equipment (base 58de945). Nouvelle compilation et nouvelle
+exécution des 10 tests depuis cette copie du dépôt : toutes réussies.
+Seul le README racine est complété pour indiquer comment ouvrir Staff ;
+les sources, ressources et configuration Equipment restent identiques à la base.

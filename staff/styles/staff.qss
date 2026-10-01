@@ -1,0 +1,27 @@
+* { font-family: "Segoe UI"; font-size: 13px; color: #07143d; }
+QLabel { background: transparent; border: none; }
+QPushButton { background: #fff; border: 1px solid #d1e2fb; border-radius: 6px; padding: 0 10px; color: #081741; }
+QPushButton:hover { background: #edf6ff; border-color: #86b9ff; }
+QPushButton:pressed { background: #dcecff; }
+QPushButton:focus { border-color: #006aff; }
+QPushButton[primary="true"] { color: white; border: 1px solid #0062fb; background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #0785ff,stop:1 #0059f8); }
+QPushButton[primary="true"]:hover { background: #0060ee; }
+QPushButton[nav="true"] { text-align: left; font-size: 17px; color: #f4f8ff; background: transparent; border: 1px solid transparent; border-radius: 7px; padding-left: 18px; }
+QPushButton[nav="true"]:hover { background: #12334c; }
+QPushButton[nav="true"][active="true"] { border-color: #0874d7; background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #057cff,stop:1 #003fb4); }
+QPushButton[tab="true"] { border: 0; border-radius: 0; background: transparent; color: #24498c; font-size: 13px; padding: 0; }
+QPushButton[tab="true"][active="true"] { color: #0067ff; border-bottom: 3px solid #0785ff; }
+QPushButton[small="true"] { font-size: 11px; padding: 0 7px; color: #0064ed; }
+QLineEdit, QComboBox { background: #fff; border: 1px solid #d6e5f9; border-radius: 6px; padding: 0 12px; color: #264987; selection-background-color: #dceeff; }
+QLineEdit:focus, QComboBox:focus { border-color: #6cabff; }
+QComboBox { padding-right: 26px; }
+QComboBox::drop-down { border: 0; width: 22px; }
+QComboBox::down-arrow { image: none; width: 0; height: 0; }
+QComboBox QAbstractItemView { background: white; color: #17386f; selection-background-color: #e2f1ff; border: 1px solid #cddffa; }
+QTableWidget { background: transparent; border: none; outline: none; }
+QHeaderView { background: transparent; }
+QCheckBox { spacing: 10px; color: #36598d; }
+QCheckBox::indicator { width: 15px; height: 15px; }
+QDialog { background: #f8fbff; }
+QDialog QLineEdit, QDialog QComboBox { min-height: 32px; }
+QDialog QPushButton { min-height: 30px; }
