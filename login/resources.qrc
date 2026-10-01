@@ -1,0 +1,7 @@
+<RCC>
+ <qresource prefix="/">
+  <file>styles/skysense.qss</file>
+  <file>assets/logo/skysense_logo.png</file>
+  <file>assets/backgrounds/login_background.jpg</file>
+ </qresource>
+</RCC>

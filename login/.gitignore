@@ -1,0 +1,19 @@
+# Qt Creator files
+.qtcreator/
+*.pro.user
+*.pro.user.*
+*.user
+*.user.*
+
+# qmake and compiler output
+build/
+debug/
+release/
+Makefile*
+*.o
+*.obj
+*.exe
+moc_*
+ui_*.h
+qrc_*
+*.autosave
