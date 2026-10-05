@@ -13,20 +13,6 @@ QFont uiFont(int size, bool bold = false) {
 }
 const QPixmap &reference() { static QPixmap image(":/assets/reference.png"); return image; }
 
-// Only decorative artwork and portraits are sampled from the supplied reference.
-// All text, cards, table cells, badges, icons and controls are genuine Qt elements.
-QPixmap portrait(int index) {
-    static QHash<int, QPixmap> cache;
-    if (!cache.contains(index)) {
-        QRect source;
-        if (index == 4) source = QRect(326, 671, 62, 62);
-        else if (index == 0) source = QRect(1413, 13, 47, 47);
-        else source = QRect(517, 374 + index * 34, 31, 31);
-        cache.insert(index, reference().copy(source));
-    }
-    return cache.value(index);
-}
-
 void drawSymbol(QPainter &p, const QString &name, QColor color) {
     p.setRenderHint(QPainter::Antialiasing);
     p.setPen(QPen(color, 1.9, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
@@ -104,13 +90,6 @@ public:
     Glyph(QWidget *parent, QString name, QRect rect, QColor color = blue): QWidget(parent), name(name), color(color) { setGeometry(rect); setAttribute(Qt::WA_TransparentForMouseEvents); }
 protected: void paintEvent(QPaintEvent *) override { QPainter p(this); paintIcon(p, name, rect(), color); }
 };
-class Avatar final : public QWidget {
-public:
-    int index;
-    Avatar(QWidget *parent, int index, QRect rect): QWidget(parent), index(index) { setGeometry(rect); }
-protected:
-    void paintEvent(QPaintEvent *) override { QPainter p(this); p.setRenderHint(QPainter::Antialiasing); p.setRenderHint(QPainter::SmoothPixmapTransform); QPainterPath clip; clip.addEllipse(QRectF(rect())); p.setClipPath(clip); p.drawPixmap(rect(), portrait(index)); }
-};
 class AccessCheckBox final : public QCheckBox {
 public:
     using QCheckBox::QCheckBox;
@@ -143,23 +122,22 @@ void badge(QPainter &p, QRectF rect, const QString &value, QColor foreground, QC
 
 struct Member {
     QString id, name, email, role, department, status, login, phone, joined;
-    int avatar = 0;
     QString note{};
 };
 QList<Member> demoMembers() {
     return {
-        {"STF-2025-012","Alex Martin","alex.martin@skysense.com","Operations Manager","Operations","Active","Apr 24, 2025 09:42","+1 (555) 234-5671","Jan 14, 2022",0},
-        {"STF-2025-011","Sophia Chen","sophia.chen@skysense.com","Station Technician","Field Operations","Active","Apr 24, 2025 08:15","+1 (555) 234-5672","Mar 03, 2023",1},
-        {"STF-2025-010","James Wilson","james.wilson@skysense.com","Maintenance Lead","Maintenance","Active","Apr 23, 2025 17:28","+1 (555) 234-5673","Sep 18, 2023",2},
-        {"STF-2025-009","Emma Thompson","emma.thompson@skysense.com","Data Analyst","Operations","Active","Apr 24, 2025 07:55","+1 (555) 234-5674","Feb 12, 2021",3},
-        {"STF-2025-008","Daniel Kim","daniel.kim@skysense.com","Technical Specialist","Engineering","Active","Apr 24, 2025 10:12","+1 (555) 234-5678","Jan 15, 2024",4},
-        {"STF-2025-007","Olivia Davis","olivia.davis@skysense.com","Administrator","IT","Active","Apr 23, 2025 16:03","+1 (555) 234-5676","Jun 27, 2022",5},
-        {"STF-2025-006","Ryan Patel","ryan.patel@skysense.com","Support Specialist","Operations","Inactive","Apr 20, 2025 11:44","+1 (555) 234-5677","Nov 08, 2024",6},
-        {"STF-2025-005","Isabella Garcia","isabella.garcia@skysense.com","Field Technician","Field Operations","Active","Apr 24, 2025 06:31","+1 (555) 234-5679","Oct 08, 2023",7},
-        {"STF-2025-004","Noah Brown","noah.brown@skysense.com","Station Technician","Field Operations","Active","Apr 24, 2025 08:00","+1 (555) 234-5680","Feb 08, 2024",2},
-        {"STF-2025-003","Mia Johnson","mia.johnson@skysense.com","Data Analyst","Operations","Active","Apr 24, 2025 08:20","+1 (555) 234-5681","Mar 12, 2024",3},
-        {"STF-2025-002","Ethan Lee","ethan.lee@skysense.com","Technical Specialist","Engineering","Active","Apr 24, 2025 08:30","+1 (555) 234-5682","Apr 10, 2024",0},
-        {"STF-2025-001","Ava Taylor","ava.taylor@skysense.com","Field Technician","Field Operations","Active","Apr 24, 2025 09:00","+1 (555) 234-5683","May 04, 2024",5}
+        {"STF-2025-012","Alex Martin","alex.martin@skysense.com","Operations Manager","Operations","Active","Apr 24, 2025 09:42","+1 (555) 234-5671","Jan 14, 2022"},
+        {"STF-2025-011","Sophia Chen","sophia.chen@skysense.com","Station Technician","Field Operations","Active","Apr 24, 2025 08:15","+1 (555) 234-5672","Mar 03, 2023"},
+        {"STF-2025-010","James Wilson","james.wilson@skysense.com","Maintenance Lead","Maintenance","Active","Apr 23, 2025 17:28","+1 (555) 234-5673","Sep 18, 2023"},
+        {"STF-2025-009","Emma Thompson","emma.thompson@skysense.com","Data Analyst","Operations","Active","Apr 24, 2025 07:55","+1 (555) 234-5674","Feb 12, 2021"},
+        {"STF-2025-008","Daniel Kim","daniel.kim@skysense.com","Technical Specialist","Engineering","Active","Apr 24, 2025 10:12","+1 (555) 234-5678","Jan 15, 2024"},
+        {"STF-2025-007","Olivia Davis","olivia.davis@skysense.com","Administrator","IT","Active","Apr 23, 2025 16:03","+1 (555) 234-5676","Jun 27, 2022"},
+        {"STF-2025-006","Ryan Patel","ryan.patel@skysense.com","Support Specialist","Operations","Inactive","Apr 20, 2025 11:44","+1 (555) 234-5677","Nov 08, 2024"},
+        {"STF-2025-005","Isabella Garcia","isabella.garcia@skysense.com","Field Technician","Field Operations","Active","Apr 24, 2025 06:31","+1 (555) 234-5679","Oct 08, 2023"},
+        {"STF-2025-004","Noah Brown","noah.brown@skysense.com","Station Technician","Field Operations","Active","Apr 24, 2025 08:00","+1 (555) 234-5680","Feb 08, 2024"},
+        {"STF-2025-003","Mia Johnson","mia.johnson@skysense.com","Data Analyst","Operations","Active","Apr 24, 2025 08:20","+1 (555) 234-5681","Mar 12, 2024"},
+        {"STF-2025-002","Ethan Lee","ethan.lee@skysense.com","Technical Specialist","Engineering","Active","Apr 24, 2025 08:30","+1 (555) 234-5682","Apr 10, 2024"},
+        {"STF-2025-001","Ava Taylor","ava.taylor@skysense.com","Field Technician","Field Operations","Active","Apr 24, 2025 09:00","+1 (555) 234-5683","May 04, 2024"}
     };
 }
 QPair<QColor,QColor> roleColors(QString role) {
@@ -184,7 +162,6 @@ protected:
         } p->restore();
     }
 };
-enum { AvatarRole=Qt::UserRole+1 };
 class StaffDelegate final : public QStyledItemDelegate {
 public:
     using QStyledItemDelegate::QStyledItemDelegate;
@@ -194,7 +171,7 @@ public:
         p->fillRect(r,selected?QColor("#e0f1ff"):QColor("#ffffff")); p->setPen(QColor("#eaf1fc")); p->drawLine(r.bottomLeft(),r.bottomRight());
         p->setFont(uiFont(12)); p->setPen(QColor("#274989"));
         if(c==0) { const bool checked=index.data(Qt::CheckStateRole).toInt()==Qt::Checked; const QRectF box(r.left()+14,r.center().y()-8,16,16); rounded(*p,box,checked?blue:QColor(Qt::white),checked?blue:QColor("#a6b3c5"),3); if(checked)paintIcon(*p,"check",box,Qt::white); }
-        else if(c==2) { const QRectF a(r.left()+17,r.top()+2,29,29); p->save(); QPainterPath clip; clip.addEllipse(a); p->setClipPath(clip); p->drawPixmap(a,portrait(index.data(AvatarRole).toInt()),QRectF(portrait(index.data(AvatarRole).toInt()).rect())); p->restore(); p->setPen(ink); const QRect copy=r.adjusted(63,0,-4,0);p->drawText(copy,Qt::AlignVCenter,QFontMetrics(p->font()).elidedText(index.data().toString(),Qt::ElideRight,copy.width())); }
+        else if(c==2) { p->setPen(ink); const QRect copy=r.adjusted(16,0,-4,0);p->drawText(copy,Qt::AlignVCenter,QFontMetrics(p->font()).elidedText(index.data().toString(),Qt::ElideRight,copy.width())); }
         else if(c==4) { const auto colors=roleColors(index.data().toString()); badge(*p,QRectF(r.left()+15,r.center().y()-12,137,25),index.data().toString(),colors.first,colors.second); }
         else if(c==6) { bool active=index.data().toString()=="Active"; badge(*p,QRectF(r.left()+15,r.center().y()-12,94,25),index.data().toString(),QColor(active?"#008e3f":"#db001a"),QColor(active?"#d9fbeb":"#ffe1e4")); }
         else if(c==8) { p->setPen(Qt::NoPen); p->setBrush(QColor("#254385")); for(int x:{-5,0,5})p->drawEllipse(QPointF(r.center().x()+x,r.center().y()),1.3,1.3); }
@@ -232,7 +209,6 @@ class StaffCanvas final : public QWidget {
     QTableWidget *table{};
     StaffHeader *header{};
     QLabel *pagination{},*name{},*role{},*description{},*status{},*email{},*phone{},*joined{};
-    Avatar *avatar{};
     QPushButton *previous{},*next{},*editStaffButton{};
     QLabel *emptyList{};
     QList<QPushButton*> tabs;
@@ -268,8 +244,8 @@ private:
         auto searchPalette=search->palette();searchPalette.setColor(QPalette::PlaceholderText,muted);search->setPalette(searchPalette);
         new Glyph(search,"search",QRect(14,9,20,20),QColor("#7187c1"));
         new Glyph(this,"calendar",QRect(1185,24,24,24),QColor("#264788")); text(this,"Thu, Apr 24, 2025",QRect(1223,19,131,32),14,ink,true);
-        new Glyph(this,"down",QRect(1350,29,14,14),muted); new Avatar(this,0,QRect(1413,13,47,47));
-        text(this,"Alex Martin",QRect(1472,13,164,24),14,ink,true); text(this,"Operations Manager",QRect(1472,35,179,22),13,muted);
+        new Glyph(this,"down",QRect(1350,29,14,14),muted);
+        text(this,"Alex Martin",QRect(1413,13,200,24),14,ink,true); text(this,"Operations Manager",QRect(1413,35,200,22),13,muted);
         new Glyph(this,"down",QRect(1626,25,18,18),ink);
         text(this,"Staff",QRect(317,70,470,54),42,QColor("#07072d"),true)->setStyleSheet("font-family:'Segoe UI';font-size:42px;font-weight:700;color:#07072d;");
         text(this,"Manage your team, assign roles, and control system access.",QRect(318,122,740,27),19,muted);
@@ -310,11 +286,10 @@ private:
         connect(header,&QHeaderView::sectionClicked,this,[this](int section){if(section!=0)return;const bool set=!header->checked;for(int r=0;r<table->rowCount();++r)table->item(r,0)->setCheckState(set?Qt::Checked:Qt::Unchecked);});
     }
     void buildDetails() {
-        avatar=new Avatar(this,4,QRect(326,671,62,62));
-        name=text(this,"Daniel Kim",QRect(403,670,450,30),21,ink,true);name->setObjectName("staffDetailName");
+        name=text(this,"Daniel Kim",QRect(335,670,450,30),21,ink,true);name->setObjectName("staffDetailName");
         status=text(this,"Active",QRect(515,674,83,24),12,QColor("#009347"));status->setObjectName("staffDetailStatus"); status->setAlignment(Qt::AlignCenter);
-        role=text(this,"Technical Specialist",QRect(403,697,520,20),13);
-        description=text(this,"Supports station operations, sensor calibration, and system troubleshooting.",QRect(403,716,580,20),12,muted);
+        role=text(this,"Technical Specialist",QRect(335,697,520,20),13);
+        description=text(this,"Supports station operations, sensor calibration, and system troubleshooting.",QRect(335,716,640,20),12,muted);
         editStaffButton=button(this,"Edit Staff","edit",QRect(990,679,114,35),true); editStaffButton->setObjectName("editStaff"); connect(editStaffButton,&QPushButton::clicked,this,[this]{editMember(false);});
         new Glyph(this,"mail",QRect(1131,687,23,23),QColor("#254a90")); email=text(this,"",QRect(1165,681,162,35),12,muted);
         new Glyph(this,"phone",QRect(1354,686,23,23));phone=text(this,"",QRect(1386,681,125,35),12,muted);
@@ -353,7 +328,7 @@ private:
         const int end=qMin((page+1)*8,int(filtered.size()));int selectedRow=-1;
         for(int n=page*8;n<end;++n){const auto &m=members[filtered[n]];const int row=table->rowCount();table->insertRow(row);
             const QStringList values{"",m.id,m.name,m.email,m.role,m.department,m.status,m.login,""};
-            for(int c=0;c<9;++c){auto *item=new QTableWidgetItem(values[c]);item->setToolTip(values[c]);item->setData(AvatarRole,m.avatar);if(c==0){item->setFlags(item->flags()|Qt::ItemIsUserCheckable);item->setCheckState(checked.contains(m.id)?Qt::Checked:Qt::Unchecked);}if(c==8)item->setToolTip("Staff actions");table->setItem(row,c,item);}
+            for(int c=0;c<9;++c){auto *item=new QTableWidgetItem(values[c]);item->setToolTip(values[c]);if(c==0){item->setFlags(item->flags()|Qt::ItemIsUserCheckable);item->setCheckState(checked.contains(m.id)?Qt::Checked:Qt::Unchecked);}if(c==8)item->setToolTip("Staff actions");table->setItem(row,c,item);}
             if(m.id==selectedId)selectedRow=row;
         }
         if(table->rowCount()){if(selectedRow<0){selectedRow=0;selectedId=table->item(0,1)->text();}table->selectRow(selectedRow);}else selectedId.clear();
@@ -363,8 +338,8 @@ private:
     void updateDetails() {
         auto *m=selected();
         editStaffButton->setEnabled(m!=nullptr);status->setVisible(m!=nullptr);for(auto *b:tabs)b->setEnabled(m!=nullptr);
-        if(!m){name->setText("No matching staff");name->setToolTip({});role->clear();description->clear();status->clear();email->clear();email->setToolTip({});phone->clear();phone->setToolTip({});joined->clear();avatar->hide();for(auto *label:infoValues)label->clear();overview->hide();tabContent->hide();return;}
-        avatar->index=m->avatar;avatar->show();avatar->update();setFittedText(name,m->name);const int badgeX=403+QFontMetrics(name->font()).horizontalAdvance(name->text())+16;status->move(badgeX,674);
+        if(!m){name->setText("No matching staff");name->setToolTip({});role->clear();description->clear();status->clear();email->clear();email->setToolTip({});phone->clear();phone->setToolTip({});joined->clear();for(auto *label:infoValues)label->clear();overview->hide();tabContent->hide();return;}
+        setFittedText(name,m->name);const int badgeX=name->x()+QFontMetrics(name->font()).horizontalAdvance(name->text())+16;status->move(badgeX,674);
         status->setText(m->status);status->setStyleSheet(QString("font-size:12px;border-radius:12px;background:%1;color:%2;").arg(m->status=="Active"?"#d9fae9":"#ffe0e3",m->status=="Active"?"#009146":"#d00019"));
         setFittedText(role,m->role);setFittedText(description,m->id=="STF-2025-008"?"Supports station operations, sensor calibration, and system troubleshooting.":"Team member in "+m->department+" · "+m->role);
         setFittedText(email,m->email);setFittedText(phone,m->phone);joined->setText(m->joined);
@@ -411,7 +386,7 @@ private:
             dialog.accept();
         });
         if(dialog.exec()!=QDialog::Accepted)return;
-        if(add){Member m;m.id=QString("STF-2025-%1").arg(members.size()+1,3,10,QChar('0'));m.avatar=0;m.login="Never";m.joined=QDate::currentDate().toString("MMM d, yyyy");members.prepend(m);existing=&members[0];}
+        if(add){Member m;m.id=QString("STF-2025-%1").arg(members.size()+1,3,10,QChar('0'));m.login="Never";m.joined=QDate::currentDate().toString("MMM d, yyyy");members.prepend(m);existing=&members[0];}
         existing->name=fullName->text().trimmed();existing->email=mail->text().trimmed();existing->phone=mobile->text().trimmed();existing->role=memberRole->currentText().trimmed();existing->department=department->currentText().trimmed();existing->status=state->currentText();existing->note=note->text();selectedId=existing->id;
         populateRoles();{QSignalBlocker a(search),b(roleFilter),c(listRoles),d(statusFilter);search->clear();roleFilter->setCurrentIndex(0);listRoles->setCurrentIndex(0);statusFilter->setCurrentIndex(0);}page=0;refresh();
     }

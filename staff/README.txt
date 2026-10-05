@@ -4,6 +4,8 @@ Cette version reprend l'organisation visuelle de la dernière image fournie :
 navigation Stations / Equipment / Maintenance / Staff / Services, quatre cartes,
 liste paginée de huit membres, Daniel Kim sélectionné, onglets, informations,
 droits d'accès et activité récente.
+Les photos de personnes sont retirées du tableau, de la fiche Staff et du profil
+en haut à droite. Les noms sont alignés à gauche, sans avatar de remplacement.
 
 DIMENSIONS ET STYLE
 La fenêtre utilise les dimensions du dossier Equipment d'origine : 1646 × 932,
@@ -16,8 +18,9 @@ Les différences de police, d'anticrénelage et d'échelle Windows peuvent influ
 sur quelques pixels du rendu ; aucune identité pixel par pixel n'est garantie.
 
 OUVRIR LE PROJET
-1. Ouvrir le dossier staff de ce dépôt.
-2. Ouvrir staff/SkySense.pro dans Qt Creator (pas le projet Equipment à la racine).
+1. Ouvrir le dossier staff du dépôt, ou extraire entièrement l'archive Staff.
+2. Ouvrir le SkySense.pro de ce dossier dans Qt Creator : staff/SkySense.pro
+   dans le dépôt, SkySense_Staff_Matched/SkySense.pro dans l'archive.
 3. Choisir le kit Desktop Qt 6.7.3 MinGW 64-bit, configurer et compiler.
 4. Lancer avec le bouton vert.
 
@@ -36,8 +39,8 @@ Les contrôles sont créés en C++, suivant la structure du projet d'origine.
 Le mode Design de Qt Creator affiche donc seulement la fenêtre conteneur.
 Ce n'est pas une image de l'interface placée en fond : le tableau, les textes,
 les cartes, les onglets et les boutons sont rendus par Qt. La ressource
-assets/reference.png fournit seulement les extraits décoratifs du logo,
-des montagnes et des portraits pour rester proche de la référence.
+assets/reference.png fournit seulement les extraits décoratifs du logo
+et des montagnes pour rester proche de la référence. Aucun portrait n'est affiché.
 
 INTERACTIONS
 Recherche, filtres rôle/statut, pagination, sélection, cases à cocher,
@@ -57,6 +60,12 @@ Les données sont de démonstration et gardées en mémoire jusqu'à la fermetur
 Les dates, tendances et invitations reproduisent la référence. Les quatre
 membres de la seconde page sont ajoutés pour démontrer la pagination.
 Les historiques, stations et notes sont illustratifs, sans connexion serveur.
+
+BILAN DES EXIGENCES PÉDAGOGIQUES
+Voir EXIGENCES_STAFF.md pour les utilisateurs proposés, l'entité Staff,
+le CRUD et l'état réel des fonctionnalités avancées. Le CRUD est incomplet :
+la suppression n'est pas implémentée. Les fonctions affichées ne constituent
+pas toutes des fonctions métier avancées terminées.
 
 CAPTURE DE L'APPLICATION
 Depuis un terminal configuré pour Qt, dans le dossier de l'exécutable :

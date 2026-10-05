@@ -1,4 +1,16 @@
-Vérification effectuée le 1 octobre 2026
+Dernière vérification : 5 octobre 2026
+
+Retouche demandée : retrait des photos de personnes du tableau Staff,
+de la fiche détaillée et du profil en haut à droite. Les noms sont réalignés.
+Dimensions conservées : 1646 × 932, minimum 1100 × 700.
+Compilation Qt 6.7.3 / MinGW 11.2 64-bit : réussie, sans avertissement ni erreur.
+Application exécutée : code de sortie 0 ; capture Qt contrôlée visuellement.
+Tests existants relancés : 10 réussis, 0 échec.
+Diff relu : modifications limitées à Staff et sa documentation.
+EXIGENCES_STAFF.md précise les utilisateurs proposés, les fonctions existantes
+et les manques réels ; aucune nouvelle fonction métier n'est ajoutée.
+
+Historique — vérification effectuée le 1 octobre 2026
 
 Compilation Release : Qt 6.7.3 / MinGW 11.2 64-bit, réussie.
 Rendu : capture réelle des widgets Qt avec le moteur Windows.
