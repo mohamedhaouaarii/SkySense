@@ -2,6 +2,7 @@
 *.pro.user
 *.pro.user.*
 *.user
+build/
 build-*/
 debug/
 release/

@@ -1,0 +1,48 @@
+* { font-family: "Segoe UI"; font-size: 12px; color: #101a3b; }
+QWidget#stationRoot, QScrollArea, QWidget { background: #f5f8fd; }
+QWidget#sidebar { background: #061b35; }
+QLabel { background: transparent; border: none; }
+QLabel#brand { background: transparent; }
+QLabel[role="sideStatus"] { color: #e7f3ff; font-size: 10px; line-height: 1.5; }
+QFrame[role="topbar"] { background: #fbfcff; border: 1px solid #e3ebf6; border-radius: 4px; }
+QLabel[role="topText"], QLabel[role="user"] { color: #18264c; font-size: 11px; }
+QLabel[role="pageTitle"] { color: #10152e; font-size: 25px; font-weight: 700; }
+QLabel[role="subtitle"] { color: #60749c; font-size: 12px; }
+QLabel[role="mapTitle"] { color: #101a3b; font-size: 14px; font-weight: 700; }
+QFrame[role="card"], QFrame[role="metric"] { background: white; border: 1px solid #e3ebf5; border-radius: 8px; }
+QFrame[role="metric"][tone="blue"] { background: #f1f8ff; }
+QFrame[role="metric"][tone="green"] { background: #f1fcf7; }
+QFrame[role="metric"][tone="red"] { background: #fff5f6; }
+QFrame[role="metric"][tone="purple"] { background: #f8f6ff; }
+QLabel[role="metricGlyph"] { color: #087cff; background: #e2f0ff; border-radius: 16px; font-size: 17px; }
+QLabel[role="metricGlyph"][tone="green"] { color: #00a866; background: #ddfaed; }
+QLabel[role="metricGlyph"][tone="red"] { color: #ef4050; background: #ffe2e6; }
+QLabel[role="metricGlyph"][tone="purple"] { color: #7454eb; background: #ebe6ff; }
+QLabel[role="metricTitle"] { color: #26365e; font-size: 11px; font-weight: 600; }
+QLabel[role="number"] { color: #111a3a; font-size: 22px; font-weight: 700; }
+QLabel[role="muted"] { color: #60749c; font-size: 10px; }
+QLabel[role="trend"] { color: #00ad60; font-size: 10px; }
+QLineEdit, QComboBox { background: white; border: 1px solid #dbe5f2; border-radius: 5px; padding: 0 8px; color: #23345d; font-size: 11px; }
+QLineEdit:focus, QComboBox:focus { border-color: #1686ff; }
+QComboBox:hover { background: #087cff; border-color: #087cff; color: white; }
+QComboBox QAbstractItemView { background: white; color: #23345d; selection-background-color: #087cff; selection-color: white; }
+QPushButton { background: white; border: 1px solid #dbe5f2; border-radius: 5px; padding: 0 10px; color: #17234a; font-size: 12px; }
+QPushButton:hover { background: #087cff; border-color: #087cff; color: white; }
+QPushButton:pressed { background: #0568d8; border-color: #0568d8; color: white; }
+QPushButton[primary="true"] { background: #087cff; border-color: #087cff; color: white; font-weight: 600; }
+QPushButton[primary="true"]:hover { background: #0069df; border-color: #0069df; color: white; }
+QPushButton[nav="true"] { text-align: left; padding: 0 10px; color: #eef6ff; background: transparent; border: 1px solid transparent; border-radius: 5px; }
+QPushButton[nav="true"]:hover { background: #087cff; border-color: #087cff; color: white; }
+QPushButton[nav="true"][active="true"] { background: #087cff; border-color: #208eff; color: white; }
+QTableWidget#stationsTable { background: white; border: 1px solid #e2eaf4; border-radius: 7px; gridline-color: transparent; font-size: 11px; }
+QHeaderView::section { background: #fbfcff; color: #30446f; border: none; border-bottom: 1px solid #e2eaf4; padding-left: 5px; font-size: 10px; font-weight: 600; }
+QTableWidget::item { border-bottom: 1px solid #edf1f7; padding-left: 4px; color: #14234b; }
+QTableWidget::item:selected { background: #edf6ff; }
+QFrame[role="region"] { background: #fbfdff; border: 1px solid #e5edf7; border-radius: 5px; }
+QLabel[role="blockTitle"] { font-size: 12px; font-weight: 700; }
+QLabel[role="regionName"] { color: #26365d; font-size: 10px; font-weight: 600; }
+QLabel[role="regionCount"], QLabel[role="tiny"], QLabel[role="mapLegend"] { color: #63779b; font-size: 9px; }
+QScrollBar:vertical { width: 8px; background: #edf2f9; }
+QScrollBar:horizontal { height: 8px; background: #edf2f9; }
+QScrollBar::handle { background: #c2d2e7; border-radius: 4px; min-height: 20px; min-width: 20px; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }

@@ -1,7 +1,20 @@
 <RCC>
  <qresource prefix="/">
   <file>styles/services.qss</file>
+  <file alias="styles/station.qss">styles/station.qss</file>
   <file>assets/backgrounds/services_alps.png</file>
+  <file alias="assets/backgrounds/login_background.png">assets/backgrounds/login_background.png</file>
   <file>assets/logo/skysense_logo.png</file>
+  <file alias="assets/stations/station_logo.png">assets/stations/station_logo.png</file>
+  <file alias="assets/stations/station_01.png">assets/stations/station_01.png</file>
+  <file alias="assets/stations/station_02.png">assets/stations/station_02.png</file>
+  <file alias="assets/stations/station_03.png">assets/stations/station_03.png</file>
+  <file alias="assets/stations/station_04.png">assets/stations/station_04.png</file>
+  <file alias="assets/stations/station_05.png">assets/stations/station_05.png</file>
+  <file alias="assets/stations/station_06.png">assets/stations/station_06.png</file>
+  <file alias="assets/stations/station_07.png">assets/stations/station_07.png</file>
+  <file alias="assets/stations/station_08.png">assets/stations/station_08.png</file>
+  <file alias="assets/stations/network_map.png">assets/stations/network_map.png</file>
+  <file alias="sounds/button_click.wav">sounds/button_click.wav</file>
  </qresource>
 </RCC>
