@@ -1,45 +1,47 @@
-Dernière vérification : 5 octobre 2026
+Vérification du 5 octobre 2026 — version corrigée
+Validation du code avant publication sur la branche gestion-staff.
 
-Retouche demandée : retrait des photos de personnes du tableau Staff,
-de la fiche détaillée et du profil en haut à droite. Les noms sont réalignés.
+ENVIRONNEMENT
+C++, Qt Widgets / Qt Test 6.7.3, qmake, MinGW 11.2 64-bit, Windows 11.
+Application et tests compilés en Release.
 Dimensions conservées : 1646 × 932, minimum 1100 × 700.
-Compilation Qt 6.7.3 / MinGW 11.2 64-bit : réussie, sans avertissement ni erreur.
-Application exécutée : code de sortie 0 ; capture Qt contrôlée visuellement.
-Tests existants relancés : 10 réussis, 0 échec.
-Diff relu : modifications limitées à Staff et sa documentation.
-EXIGENCES_STAFF.md précise les utilisateurs proposés, les fonctions existantes
-et les manques réels ; aucune nouvelle fonction métier n'est ajoutée.
+Aucun portrait ni point décoratif macOS.
 
-Historique — vérification effectuée le 1 octobre 2026
+RÉSULTATS
+Compilation de l'application et des tests : réussie.
+Exécution de l'application et capture Qt : code de sortie 0.
+18 résultats Qt Test réussis, 0 échec, 0 ignoré
+(16 scénarios + initialisation/nettoyage).
+Chaque scénario utilise un dossier de données temporaire distinct.
 
-Compilation Release : Qt 6.7.3 / MinGW 11.2 64-bit, réussie.
-Rendu : capture réelle des widgets Qt avec le moteur Windows.
-Taille de la capture : 1646 × 932 pixels, hors cadre Windows.
-Inspection visuelle du tableau, de l'en-tête et du panneau inférieur effectuée.
+SCÉNARIOS
+- rendu initial, absence des points décoratifs, badge sans chevauchement ;
+- redimensionnement proportionnel ;
+- filtres, pagination, recherche et état vide ;
+- cases à cocher à la souris et au clavier ;
+- validation et unicité email, création/modification relues après réouverture ;
+- annulation du formulaire sans modification ;
+- droits et onglets ;
+- textes longs sans débordement ;
+- export depuis le bouton PDF et vérification du fichier produit ;
+- tri sur toutes les pages, conservé avec les filtres ;
+- suppression annulée puis confirmée, persistante, avec audit du membre supprimé ;
+- profils d'habilitation persistants et refus effectif pour un membre inactif ;
+- statistiques et totaux des groupes après suppression ;
+- suppression de tous les membres, sans recréation des exemples au redémarrage ;
+- non-réutilisation des identifiants après suppression et réouverture ;
+- refus d'une modification issue d'une fenêtre devenue obsolète, sans écraser
+  les données de l'autre instance et avec retour de l'interface à son état précédent ;
+- refus des doublons, d'un fichier corrompu et d'une écriture concurrente verrouillée.
 
-Qt Test : 10 résultats réussis, 0 échec (8 scénarios + initialisation/nettoyage).
-Projet de tests : tests/staff_tests.pro.
+LIVRAISON
+Sources, ressources, tests et documentation dans le ZIP.
+Aucune donnée utilisateur, build, cache IDE, .git ou bibliothèque copiée.
+Modifications limitées au dossier Staff.
+Base de cette correction : 5ebe082 (version antérieure).
+Branche de livraison : gestion-staff.
 
-Scénarios :
-- état initial, absence des points décoratifs, badge sans chevauchement,
-  conservation des proportions à 1100 × 700 ;
-- recherche sans distinction de casse, espaces superflus, état vide,
-  pagination, filtres et synchronisation des deux listes de rôles ;
-- clics sur les cases dessinées, touche Espace, sélection globale ;
-- ajout et édition, nom obligatoire, email valide et unique,
-  rôle et département obligatoires, espaces de début/fin retirés ;
-- annulation d'un formulaire sans modification du membre ;
-- modification et conservation des droits, changement d'onglet ;
-- textes longs sans dépassement, texte complet en infobulle ;
-- export depuis le bouton PDF avec un filtre actif : ouverture de la boîte
-  de dialogue, sauvegarde et vérification de la signature du fichier PDF.
-
-Compilation de l'application et des tests : sans avertissement ni erreur.
-Exécution et capture de l'application : code de sortie 0.
-Diff local relu ; les modules autres que Staff n'ont pas été modifiés.
-
-Intégration Git : dossier staff/ sur la branche gestion-staff, issue de la
-branche par défaut equipment (base 58de945). Nouvelle compilation et nouvelle
-exécution des 10 tests depuis cette copie du dépôt : toutes réussies.
-Seul le README racine est complété pour indiquer comment ouvrir Staff ;
-les sources, ressources et configuration Equipment restent identiques à la base.
+PÉRIMÈTRE
+Stockage JSON local. Le journal utilise l'opérateur Windows.
+Pas de Login ni de serveur ajouté ; les autres modules ne sont pas modifiés.
+EXIGENCES_STAFF.md décrit les cinq fonctions et la limite d'intégration des droits.

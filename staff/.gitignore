@@ -31,3 +31,7 @@ target_wrapper.*
 .env
 .env.*
 !.env.example
+
+# Local Staff records (normally stored under AppData, outside the project)
+staff.json
+staff.json.lock

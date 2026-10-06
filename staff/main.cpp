@@ -2,6 +2,7 @@
 #include <QApplication>
 #include <QTimer>
 #include <QWidget>
+#include <QTemporaryDir>
 
 int main(int argc, char *argv[])
 {
@@ -9,9 +10,14 @@ int main(int argc, char *argv[])
     app.setApplicationName("SkySense Staff");
     app.setOrganizationName("CoreVision");
     app.setStyle("Fusion");
-    SkySenseWindow window;
     const QStringList arguments = app.arguments();
     const int capture = arguments.indexOf("--screenshot");
+    QTemporaryDir captureData;
+    if(capture>=0 && capture+1<arguments.size()) {
+        if(!captureData.isValid())return 1;
+        app.setProperty("staffStoragePath",captureData.filePath("staff.json"));
+    }
+    SkySenseWindow window;
     if (capture >= 0 && capture + 1 < arguments.size()) {
         // Render the real Qt window at the original project's dimensions, without OS chrome.
         window.setAttribute(Qt::WA_DontShowOnScreen);

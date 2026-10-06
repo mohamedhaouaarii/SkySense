@@ -1,85 +1,83 @@
-SkySense — Staff | Qt 6.7.3
+SkySense — Gestion Staff | Qt 6.7.3
+Version corrigée du 5 octobre 2026 — branche gestion-staff.
 
-Cette version reprend l'organisation visuelle de la dernière image fournie :
-navigation Stations / Equipment / Maintenance / Staff / Services, quatre cartes,
-liste paginée de huit membres, Daniel Kim sélectionné, onglets, informations,
-droits d'accès et activité récente.
-Les photos de personnes sont retirées du tableau, de la fiche Staff et du profil
-en haut à droite. Les noms sont alignés à gauche, sans avatar de remplacement.
+OUVRIR ET LANCER
+1. Extraire entièrement le ZIP.
+2. Ouvrir SkySense_Staff_Matched/SkySense.pro dans Qt Creator.
+   Dans la copie du dépôt, le projet est staff/SkySense.pro.
+3. Choisir Desktop Qt 6.7.3 MinGW 64-bit.
+4. Exécuter qmake, puis Rebuild Project et Run.
+Le projet Equipment à la racine du dépôt reste indépendant et inchangé.
 
-DIMENSIONS ET STYLE
-La fenêtre utilise les dimensions du dossier Equipment d'origine : 1646 × 932,
-avec un minimum de 1100 × 700. Les proportions du contenu sont conservées à
-toutes les tailles, avec des marges si nécessaire. Les points décoratifs rouge,
-jaune et vert en haut à gauche sont retirés. Le dessin est organisé sur une grille de
-1672 × 941 puis ajusté à la fenêtre via QGraphicsView.
-La police est Segoe UI, comme dans equipmentui.cpp et equipment.qss d'origine.
-Les différences de police, d'anticrénelage et d'échelle Windows peuvent influer
-sur quelques pixels du rendu ; aucune identité pixel par pixel n'est garantie.
+INTERFACE
+Dimensions : 1646 × 932 ; minimum 1100 × 700 ; proportions conservées.
+Police Segoe UI, palette SkySense, aucun portrait et aucun point macOS.
+Les contrôles sont créés en C++. Le fichier .ui contient la fenêtre conteneur.
+Le logo et les montagnes utilisent les extraits décoratifs de reference.png.
 
-OUVRIR LE PROJET
-1. Ouvrir le dossier staff du dépôt, ou extraire entièrement l'archive Staff.
-2. Ouvrir le SkySense.pro de ce dossier dans Qt Creator : staff/SkySense.pro
-   dans le dépôt, SkySense_Staff_Matched/SkySense.pro dans l'archive.
-3. Choisir le kit Desktop Qt 6.7.3 MinGW 64-bit, configurer et compiler.
-4. Lancer avec le bouton vert.
+CRUD STAFF
+- Add Staff : nom, email unique, rôle et département obligatoires.
+- Liste et fiche : consultation, pagination, cases et détails.
+- Edit Staff : coordonnées, rôle, département, statut et note.
+- Delete Staff : bouton sous la fiche ou menu Actions, avec confirmation.
+  Les habilitations du membre sont retirées ; son historique est conservé.
+- L'identifiant est généré automatiquement et n'est pas réutilisé après suppression.
 
-Ce dossier conserve la structure du projet Staff fourni. Les fichiers
-Equipment à la racine du dépôt sont conservés ; chaque module possède
-son propre exécutable qmake. Aucune navigation entre modules n'est ajoutée.
+CINQ FONCTIONNALITÉS AVANCÉES
+1. Recherche et tri : recherche par ID, nom, email, rôle ou département ;
+   filtres rôle/statut ; clic sur les en-têtes ID à Last Login pour alterner
+   croissant/décroissant. Le tri porte sur tous les résultats, avant pagination.
+2. Export PDF : tous les résultats filtrés, dans leur ordre de tri.
+3. Statistics : effectifs et pourcentages calculés ; répartition graphique
+   par département ou rôle. Les fausses tendances et invitations sont retirées.
+4. Edit Access : profils d'habilitation (administrateur, terrain, maintenance,
+   aucun accès) ou droits personnalisés par module. Un membre inactif a
+   toujours des droits effectifs refusés, même si ses droits configurés sont conservés.
+5. Activity Log : actions réellement réalisées, avec date, opérateur local,
+   membre et détail. Recherche possible ; l'historique conserve les membres supprimés.
+
+SAUVEGARDE LOCALE
+Les membres, habilitations, identifiants et événements sont enregistrés en JSON
+dans le dossier AppLocalDataLocation de Qt, normalement :
+%LOCALAPPDATA%/CoreVision/SkySense Staff/staff.json
+L'infobulle de « Saved on this device » indique le chemin exact.
+Les 12 fiches d'exemple sont créées uniquement au premier lancement.
+Une liste vide reste vide après redémarrage.
+Les écritures sont atomiques ; un verrou et un numéro de révision évitent
+l'écrasement des changements d'une autre instance. En cas d'erreur, la
+modification est annulée dans l'interface et un message explique le problème.
+Un fichier invalide n'est jamais remplacé automatiquement.
+Pour sauvegarder vos données, fermer l'application puis copier staff.json.
+
+PÉRIMÈTRE
+Il n'y a ni serveur ni module Login ajouté. L'opérateur affiché et enregistré
+dans le journal correspond au nom de session Windows ; ce n'est pas une
+identité authentifiée par SkySense. Le journal local n'est pas inviolable.
+Staff::effectiveAccess fournit le calcul des droits effectifs ; les autres
+modules devront l'utiliser lors de leur intégration avec le Login de l'équipe.
+Last Login est une donnée initiale d'exemple, sans simulation de connexions.
+La navigation vers les autres modules reste hors de cette livraison.
 
 FICHIERS
-staffui.cpp : interface, pictogrammes, tableau, détails et interactions.
-styles/staff.qss : palette, bordures, boutons, champs et typographie.
-skysensewindow.ui : fenêtre principale 1646 × 932.
-skysensewindow.cpp : initialisation de la fenêtre et taille minimale.
-resources.qrc : ressources intégrées à l'exécutable.
+staffui.cpp/.h : interface et interactions.
+staffdata.cpp/.h : entité, statistiques, calcul des droits, validation et stockage.
+styles/staff.qss : style ; assets/ : ressources.
+EXIGENCES_STAFF.md : acteurs, CRUD, cinq fonctions et démonstration.
+VERIFICATION.txt : résultats de compilation et de tests.
 
-Les contrôles sont créés en C++, suivant la structure du projet d'origine.
-Le mode Design de Qt Creator affiche donc seulement la fenêtre conteneur.
-Ce n'est pas une image de l'interface placée en fond : le tableau, les textes,
-les cartes, les onglets et les boutons sont rendus par Qt. La ressource
-assets/reference.png fournit seulement les extraits décoratifs du logo
-et des montagnes pour rester proche de la référence. Aucun portrait n'est affiché.
-
-INTERACTIONS
-Recherche, filtres rôle/statut, pagination, sélection, cases à cocher,
-ajout/modification d'un membre, activation/désactivation, droits d'accès,
-onglets et export PDF des résultats filtrés.
-Les formulaires vérifient le nom, l'adresse email, son unicité (sans distinction
-de casse), le rôle et le département. Annuler ne modifie pas le membre.
-Les cases du tableau fonctionnent à la souris et au clavier. En l'absence de
-résultat, les actions sur le membre sont désactivées. Les textes longs sont
-abrégés visuellement, avec leur contenu complet dans une infobulle.
-L'export PDF utilise une écriture atomique pour préserver un rapport existant
-si l'enregistrement échoue.
-Les autres sections de navigation affichent un message ; ce projet est
-le module Staff autonome, à relier aux autres modules de votre application.
-
-Les données sont de démonstration et gardées en mémoire jusqu'à la fermeture.
-Les dates, tendances et invitations reproduisent la référence. Les quatre
-membres de la seconde page sont ajoutés pour démontrer la pagination.
-Les historiques, stations et notes sont illustratifs, sans connexion serveur.
-
-BILAN DES EXIGENCES PÉDAGOGIQUES
-Voir EXIGENCES_STAFF.md pour les utilisateurs proposés, l'entité Staff,
-le CRUD et l'état réel des fonctionnalités avancées. Le CRUD est incomplet :
-la suppression n'est pas implémentée. Les fonctions affichées ne constituent
-pas toutes des fonctions métier avancées terminées.
-
-CAPTURE DE L'APPLICATION
-Depuis un terminal configuré pour Qt, dans le dossier de l'exécutable :
-SkySense_Staff_Matched.exe --screenshot apercu.png
-La capture montre le contenu Qt sans le cadre Windows, en 1646 × 932 pixels.
-
-TESTS STAFF
-tests/staff_tests.pro utilise Qt Test 6.7.3, sans changer la configuration de
-l'application. Dans un terminal configuré pour le kit MinGW Qt 6.7.3, créer
-un dossier de compilation séparé puis exécuter :
+TESTS
+Compiler tests/staff_tests.pro dans un dossier de build séparé :
 qmake chemin/vers/tests/staff_tests.pro
 mingw32-make
 release\staff_tests.exe
+Chaque test utilise un dossier temporaire ; les vraies données ne sont pas modifiées.
 
-Les tests couvrent le rendu sans points décoratifs, le redimensionnement,
-les filtres, la pagination, les cases, la validation, l'annulation, les droits,
-les textes longs et la création d'un PDF.
+CAPTURE
+SkySense_Staff_Matched.exe --screenshot apercu.png
+Ce mode utilise des données temporaires et ne modifie pas votre fichier staff.json.
+
+GESTION DES VERSIONS
+Branche individuelle : gestion-staff.
+Les corrections Staff prolongent le commit 5ebe082.
+Les commits de ce module restent limités au dossier staff/ ; les données locales,
+builds et caches IDE sont exclus du suivi Git.
