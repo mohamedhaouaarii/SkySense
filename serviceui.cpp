@@ -14,24 +14,39 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLineEdit>
 #include <QList>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPixmap>
 #include <QPainterPath>
+#include <QPropertyAnimation>
 #include <QPushButton>
 #include <QTime>
 #include <QTimeEdit>
 #include <QResizeEvent>
+#include <QResource>
+#include <QScreen>
+#include <QVariantAnimation>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QStringList>
 #include <QVector>
 #include <QTextEdit>
+#include <QTimer>
+#include <functional>
 #include <QStyledItemDelegate>
 #include <QTableWidget>
 #include <QVBoxLayout>
 #include <QtMath>
+
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <mmsystem.h>
+#endif
 
 namespace {
 const QColor navy("#091b40"), muted("#5d77ad"), blue("#0785ff");
@@ -73,6 +88,9 @@ void symbol(QPainter &p, const QString &name, QColor color)
         p.drawEllipse(QRectF(3,3,18,18)); p.drawLine(12,6,12,12); p.drawLine(12,12,17,14);
     } else if (name == "info") {
         p.drawEllipse(QRectF(2,2,20,20)); p.drawPoint(QPointF(12,7)); p.drawLine(12,11,12,17);
+    } else if (name == "warning") {
+        path.moveTo(12,2); path.lineTo(22,21); path.lineTo(2,21); path.closeSubpath(); p.drawPath(path);
+        p.drawLine(12,8,12,14); p.drawPoint(QPointF(12,18));
     } else if (name == "description") {
         path.moveTo(6,2); path.lineTo(15,2); path.lineTo(20,7); path.lineTo(20,22); path.lineTo(6,22); path.closeSubpath(); p.drawPath(path); p.drawLine(15,2,15,7); p.drawLine(15,7,20,7); p.drawLine(9,12,17,12); p.drawLine(9,16,17,16);
     } else if (name == "checklist") {
@@ -87,12 +105,31 @@ void symbol(QPainter &p, const QString &name, QColor color)
     } else if (name == "chart") {
         p.drawLine(3,21,3,3); p.drawLine(3,21,22,21);
         p.drawLine(7,18,7,14); p.drawLine(12,18,12,10); p.drawLine(17,18,17,6); p.drawLine(22,18,22,2);
+    } else if (name == "edit") {
+        path.moveTo(4,17); path.lineTo(16,5); path.lineTo(20,9); path.lineTo(8,21); path.lineTo(3,22); path.closeSubpath(); p.drawPath(path);
+        p.drawLine(14,7,18,11);
+    } else if (name == "trash") {
+        p.drawLine(5,7,19,7); p.drawLine(9,4,15,4); p.drawLine(7,8,8,21); p.drawLine(17,8,16,21);
+        p.drawLine(8,21,16,21); p.drawLine(10,10,10,18); p.drawLine(14,10,14,18);
     }
 }
 
 QIcon icon(const QString &name, QColor color=blue)
 {
     QPixmap px(48,48); px.fill(Qt::transparent); QPainter p(&px); p.scale(2,2); symbol(p,name,color); p.end(); px.setDevicePixelRatio(2); return QIcon(px);
+}
+
+void playClickSound()
+{
+#ifdef Q_OS_WIN
+    static const QByteArray wave=[]() {
+        QFile file(":/assets/sounds/ui_click.wav");
+        return file.open(QIODevice::ReadOnly)?file.readAll():QByteArray();
+    }();
+    if(!wave.isEmpty()) PlaySoundA(reinterpret_cast<LPCSTR>(wave.constData()),nullptr,SND_MEMORY|SND_ASYNC|SND_NODEFAULT);
+#else
+    QApplication::beep();
+#endif
 }
 
 QLabel *text(const QString &value, const char *role="body")
@@ -106,7 +143,9 @@ QPushButton *button(const QString &title, const QString &glyph, bool primary=fal
     auto *b=new QPushButton(title);
     if (!glyph.isEmpty()) b->setIcon(icon(glyph,primary?Qt::white:navy));
     b->setIconSize(QSize(20,20)); b->setProperty("primary",primary);
-    b->setCursor(Qt::PointingHandCursor); b->setMinimumHeight(42); return b;
+    b->setCursor(Qt::PointingHandCursor); b->setMinimumHeight(42);
+    QObject::connect(b,&QPushButton::clicked,b,[]() { playClickSound(); });
+    return b;
 }
 
 QFrame *card(const char *role="card")
@@ -134,7 +173,7 @@ protected:
 
 QComboBox *selector(const QStringList &values)
 {
-    auto *combo=new Selector; combo->addItems(values); combo->setFixedHeight(42); combo->setMinimumWidth(118); return combo;
+    auto *combo=new Selector; combo->addItems(values); combo->setFixedHeight(48); combo->setMinimumWidth(118); return combo;
 }
 
 class Glyph final : public QWidget {
@@ -190,7 +229,7 @@ QWidget *metricCard(const QString &title,const QString &value,const QString &tot
     auto *row=new QHBoxLayout(f); row->setContentsMargins(14,14,12,12); row->setSpacing(11);
     row->addWidget(new Glyph(glyph,accent,46,true),0,Qt::AlignTop);
     auto *copy=new QVBoxLayout; copy->setSpacing(3); copy->addWidget(text(title,"metricTitle"));
-    auto *numbers=new QHBoxLayout; numbers->setSpacing(5); numbers->addWidget(text(value,"number")); numbers->addWidget(text(total,"muted"),1,Qt::AlignBottom); copy->addLayout(numbers);
+    auto *numbers=new QHBoxLayout; numbers->setSpacing(5); auto *count=text(value,"number"); count->setProperty("role","metricCount"); numbers->addWidget(count); auto *totalLabel=text(total,"muted"); totalLabel->setProperty("role","metricTotal"); numbers->addWidget(totalLabel,1,Qt::AlignBottom); copy->addLayout(numbers);
     auto *change=text(QString::fromUtf8("↗  ")+trend,"trend"); change->setProperty("tone",tone); copy->addWidget(change);
     row->addLayout(copy,1); row->addWidget(new Glyph("chart",accent,30),0,Qt::AlignVCenter); return f;
 }
@@ -210,6 +249,17 @@ QVector<ServiceRecord> serviceRecords{
     {"SRV-006","Software Update","Software","DES-05","Desert View","Olivia Martinez","Apr 26, 2025","13:00","16:00","Low","Scheduled",{},{}}
 };
 
+QString nextServiceId()
+{
+    int next=1;
+    for(const auto &record:serviceRecords) {
+        bool ok=false;
+        const int number=record.id.mid(4).toInt(&ok);
+        if(ok) next=qMax(next,number+1);
+    }
+    return QString("SRV-%1").arg(next,3,10,QChar('0'));
+}
+
 QString glyphForType(const QString &type)
 {
     if (type=="Maintenance") return "wrench";
@@ -221,13 +271,20 @@ QString glyphForType(const QString &type)
 }
 
 class ServiceDelegate final : public QStyledItemDelegate {
+    QVector<qreal> rowOpacity;
 public:
-    using QStyledItemDelegate::QStyledItemDelegate;
+    explicit ServiceDelegate(QObject *parent=nullptr):QStyledItemDelegate(parent),rowOpacity(serviceRecords.size(),1.0) {}
+    void setRowOpacity(int row,qreal opacity) {
+        if(row>=rowOpacity.size()) rowOpacity.resize(row+1,1.0);
+        rowOpacity[row]=opacity;
+    }
     void paint(QPainter *p,const QStyleOptionViewItem &o,const QModelIndex &index) const override {
         p->save(); p->setRenderHint(QPainter::Antialiasing); const QRect r=o.rect; const int row=index.row(), col=index.column();
+        p->setOpacity(p->opacity()*(row<rowOpacity.size()?rowOpacity[row]:1.0));
         const bool checked=index.siblingAtColumn(0).data(Qt::CheckStateRole).toInt()==Qt::Checked;
         const ServiceRecord &record=serviceRecords[row];
-        p->fillRect(r,checked?QColor("#e5f4ff"):Qt::white); p->setPen(QColor("#e5eef9")); p->drawLine(r.bottomLeft(),r.bottomRight());
+        const bool hovered=(o.state & QStyle::State_MouseOver) && !checked;
+        p->fillRect(r,checked?QColor("#e5f4ff"):hovered?QColor("#f2f8ff"):Qt::white); p->setPen(QColor("#e5eef9")); p->drawLine(r.bottomLeft(),r.bottomRight());
         QFont font("Segoe UI"); font.setPixelSize(13); p->setFont(font); p->setPen(navy);
         if(col==0) {
             if(checked) p->fillRect(QRect(r.left(),r.top(),3,r.height()),blue);
@@ -278,9 +335,10 @@ protected:
 };
 
 class ServiceTable final : public QTableWidget {
+    std::function<void()> changeCallback;
 public:
     ServiceTable():QTableWidget(serviceRecords.size(),10) {
-        setObjectName("serviceTable"); setHorizontalHeader(new ServiceHeader(this));
+        setObjectName("serviceTable"); setHorizontalHeader(new ServiceHeader(this)); viewport()->setMouseTracking(true); setMouseTracking(true);
         setHorizontalHeaderLabels({"","ID","Title","Type","Station","Assignee","Scheduled Date","Priority","Status","Actions"});
         verticalHeader()->hide(); verticalHeader()->setDefaultSectionSize(42); horizontalHeader()->setFixedHeight(40); horizontalHeader()->setDefaultAlignment(Qt::AlignLeft|Qt::AlignVCenter);
         horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed); setItemDelegate(new ServiceDelegate(this)); setShowGrid(false); setSelectionMode(QAbstractItemView::NoSelection); setEditTriggers(QAbstractItemView::NoEditTriggers); setFocusPolicy(Qt::NoFocus);
@@ -303,6 +361,67 @@ public:
         setRowHeight(row,42);
         updateHeight();
         viewport()->update();
+        if(changeCallback) changeCallback();
+    }
+    int checkedRow() const {
+        for(int row=0;row<rowCount();++row) {
+            const auto *check=item(row,0);
+            if(!isRowHidden(row) && check && check->checkState()==Qt::Checked) return row;
+        }
+        return -1;
+    }
+    ServiceRecord serviceAt(int row) const { return serviceRecords.value(row); }
+    void setChangeCallback(std::function<void()> callback) { changeCallback=std::move(callback); }
+    int visibleServiceCount() const { int count=0; for(int row=0;row<rowCount();++row) if(!isRowHidden(row)) ++count; return count; }
+    int serviceCount() const { return serviceRecords.size(); }
+    int serviceCountWithStatus(const QString &status) const { int count=0; for(const ServiceRecord &record:serviceRecords) if(record.status==status) ++count; return count; }
+    void applyFilters(const QString &query,const QString &type,const QString &station,const QString &status) {
+        const QString needle=query.trimmed();
+        for(int row=0;row<rowCount();++row) {
+            const ServiceRecord &r=serviceRecords[row];
+            const QString haystack=(r.id+" "+r.title+" "+r.stationCode+" "+r.stationName+" "+r.assignee).toCaseFolded();
+            const bool matchesText=needle.isEmpty() || haystack.contains(needle.toCaseFolded());
+            const bool matchesType=type=="All Types" || r.type==type;
+            const bool matchesStation=station=="All Stations" || r.stationCode==station;
+            const bool matchesStatus=status=="All Statuses" || r.status==status;
+            setRowHidden(row,!(matchesText&&matchesType&&matchesStation&&matchesStatus));
+        }
+        updateHeight(); viewport()->update();
+    }
+    void animateRows(int delayMs,int stepMs) {
+        auto *delegate=static_cast<ServiceDelegate *>(itemDelegate());
+        for(int row=0;row<rowCount();++row) {
+            delegate->setRowOpacity(row,0.0);
+            QTimer::singleShot(delayMs+row*stepMs,this,[this,delegate,row]() {
+                auto *animation=new QVariantAnimation(this);
+                animation->setDuration(430);
+                animation->setStartValue(0.0);
+                animation->setEndValue(1.0);
+                animation->setEasingCurve(QEasingCurve::OutCubic);
+                connect(animation,&QVariantAnimation::valueChanged,this,[this,delegate,row](const QVariant &value) {
+                    delegate->setRowOpacity(row,value.toReal());
+                    viewport()->update();
+                });
+                animation->start(QAbstractAnimation::DeleteWhenStopped);
+            });
+        }
+    }
+    void updateService(int row,const ServiceRecord &record) {
+        if(row<0 || row>=serviceRecords.size()) return;
+        serviceRecords[row]=record;
+        clearContents();
+        for(int current=0;current<rowCount();++current) populateRow(current);
+        if(item(row,0)) item(row,0)->setCheckState(Qt::Checked);
+        viewport()->update(); if(changeCallback) changeCallback();
+    }
+    void removeService(int row) {
+        if(row<0 || row>=serviceRecords.size()) return;
+        serviceRecords.removeAt(row);
+        setRowCount(serviceRecords.size());
+        clearContents();
+        for(int current=0;current<rowCount();++current) { populateRow(current); setRowHeight(current,42); }
+        updateHeight();
+        viewport()->update(); if(changeCallback) changeCallback();
     }
 protected:
     void resizeEvent(QResizeEvent *event) override {
@@ -322,27 +441,19 @@ private:
         }
     }
     void updateHeight() {
-        int total=0; const int widths[]{42,86,171,122,116,139,155,88,112,56}; for(int n:widths) total+=n;
-        int h=40+rowCount()*42+4+(viewport()->width()<total?14:0); if(height()!=h) setFixedHeight(h);
+        int total=0,visible=0; const int widths[]{42,86,171,122,116,139,155,88,112,56}; for(int n:widths) total+=n;
+        for(int row=0;row<rowCount();++row) if(!isRowHidden(row)) ++visible;
+        int h=40+visible*42+4+(viewport()->width()<total?14:0); if(height()!=h) setFixedHeight(h);
     }
 };
-
-QFrame *formSection(const QString &title,const QString &glyph,QWidget **body)
-{
-    auto *section=new QFrame; section->setProperty("role","formSection");
-    auto *layout=new QVBoxLayout(section); layout->setContentsMargins(0,0,0,0); layout->setSpacing(0);
-    auto *header=new QWidget; header->setProperty("role","formSectionHeader");
-    auto *headerLayout=new QHBoxLayout(header); headerLayout->setContentsMargins(12,7,12,7); headerLayout->setSpacing(9);
-    headerLayout->addWidget(new Glyph(glyph,blue,22)); headerLayout->addWidget(text(title,"formSectionTitle")); headerLayout->addStretch(); layout->addWidget(header);
-    *body=new QWidget; auto *bodyLayout=new QVBoxLayout(*body); bodyLayout->setContentsMargins(12,10,12,11); bodyLayout->setSpacing(8); layout->addWidget(*body);
-    return section;
-}
 
 QWidget *formField(const QString &title,QWidget *control,bool required=true)
 {
     auto *field=new QWidget; auto *layout=new QVBoxLayout(field); layout->setContentsMargins(0,0,0,0); layout->setSpacing(5);
     layout->addWidget(text(required?title+" *":title,"fieldLabel")); layout->addWidget(control); return field;
 }
+
+bool confirmDeleteService(QWidget *parent,const ServiceRecord &record);
 
 class AddServiceDialog final : public QDialog {
     QLineEdit *idEdit=nullptr,*titleEdit=nullptr;
@@ -353,98 +464,263 @@ class AddServiceDialog final : public QDialog {
     QLabel *descriptionCount=nullptr,*stationCodePreview=nullptr,*stationNamePreview=nullptr,*datePreview=nullptr,*timePreview=nullptr;
     QVBoxLayout *checklistLayout=nullptr;
     QStringList checklistItems;
+    bool editingMode=false;
+    bool deleteRequestedFlag=false;
 public:
-    explicit AddServiceDialog(QWidget *parent=nullptr):QDialog(parent) {
-        setObjectName("addServiceDialog"); setWindowTitle("Add New Service"); setWindowModality(Qt::WindowModal); setWindowFlags(Qt::Dialog|Qt::FramelessWindowHint); setAttribute(Qt::WA_TranslucentBackground);
-        setMinimumSize(860,700); resize(920,870);
+    explicit AddServiceDialog(QWidget *parent=nullptr,const ServiceRecord *existing=nullptr):QDialog(parent),editingMode(existing!=nullptr) {
+        setObjectName("addServiceDialog");
+        setWindowTitle(editingMode?"Edit Service — SkySense":"Add Service — SkySense");
+        setWindowModality(Qt::WindowModal);
+        setWindowFlags(Qt::Dialog|Qt::WindowTitleHint|Qt::WindowCloseButtonHint);
+        QScreen *screen=QApplication::primaryScreen();
+        if(parent) {
+            if(QScreen *parentScreen=QApplication::screenAt(parent->mapToGlobal(parent->rect().center()))) screen=parentScreen;
+        }
+        const QRect available=screen?screen->availableGeometry():QRect(0,0,1280,800);
+        const int maxWidth=qMax(760,available.width()-64);
+        const int maxHeight=qMax(620,available.height()-84);
+        setMaximumSize(maxWidth,maxHeight);
+        setMinimumSize(qMin(editingMode?900:760,maxWidth),qMin(editingMode?620:580,maxHeight));
+        resize(qMin(editingMode?1120:860,maxWidth),qMin(editingMode?790:740,maxHeight));
         QFile dialogStylesheet(":/styles/services.qss");
         if(dialogStylesheet.open(QIODevice::ReadOnly)) setStyleSheet(QString::fromUtf8(dialogStylesheet.readAll()));
-        else setStyleSheet("QDialog#addServiceDialog{background:#ffffff;border:1px solid #dce9f8;border-radius:10px}");
-        auto *shadow=new QGraphicsDropShadowEffect(this); shadow->setBlurRadius(26); shadow->setOffset(0,8); shadow->setColor(QColor(12,37,76,65)); setGraphicsEffect(shadow);
-        auto *root=new QVBoxLayout(this); root->setContentsMargins(18,14,18,14); root->setSpacing(10);
 
-        auto *heading=new QHBoxLayout; auto *plus=new QLabel("+"); plus->setAlignment(Qt::AlignCenter); plus->setFixedSize(48,48); plus->setStyleSheet("background:#087ff5;color:white;border-radius:24px;font-size:28px;font-weight:300"); heading->addWidget(plus);
-        auto *headingCopy=new QVBoxLayout; headingCopy->setSpacing(1); headingCopy->addWidget(text("Add New Service","dialogTitle")); headingCopy->addWidget(text("Create and schedule a new field service.","dialogSubtitle")); heading->addLayout(headingCopy,1);
-        auto *close=new QPushButton(QString::fromUtf8("×")); close->setObjectName("dialogClose"); close->setFixedSize(34,34); close->setCursor(Qt::PointingHandCursor); heading->addWidget(close,0,Qt::AlignTop); connect(close,&QPushButton::clicked,this,&QDialog::reject); root->addLayout(heading);
+        auto *root=new QVBoxLayout(this);
+        root->setContentsMargins(22,18,22,18);
+        root->setSpacing(14);
 
-        auto *columns=new QHBoxLayout; columns->setSpacing(12);
-        auto *scroll=new QScrollArea; scroll->setObjectName("formScroll"); scroll->setWidgetResizable(true); scroll->setFrameShape(QFrame::NoFrame); scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        auto *form=new QWidget; auto *formLayout=new QVBoxLayout(form); formLayout->setContentsMargins(0,0,2,0); formLayout->setSpacing(9);
+        auto *heading=new QHBoxLayout;
+        heading->setSpacing(18);
+        auto *mark=new QLabel(editingMode?QString::fromUtf8("✎"):"+");
+        mark->setObjectName("serviceFormPlus");
+        mark->setAlignment(Qt::AlignCenter);
+        mark->setFixedSize(66,66);
+        heading->addWidget(mark);
+        auto *headingCopy=new QVBoxLayout;
+        headingCopy->setSpacing(3);
+        headingCopy->addWidget(text(editingMode?"Edit Service":"Add Service","dialogTitle"));
+        headingCopy->addWidget(text(editingMode?"Update the details of this field service.":"Register and schedule a new field service.","dialogSubtitle"));
+        heading->addLayout(headingCopy,1);
+        auto *idCard=new QWidget;
+        idCard->setObjectName("autoIdCard");
+        auto *idLayout=new QVBoxLayout(idCard);
+        idLayout->setContentsMargins(16,9,16,9);
+        idLayout->setSpacing(2);
+        idLayout->addWidget(text(editingMode?"SERVICE ID":"AUTO ID","smallMuted"));
+        idEdit=new QLineEdit(existing?existing->id:nextServiceId());
+        idEdit->setObjectName("serviceAutoId");
+        idEdit->setReadOnly(true);
+        idLayout->addWidget(idEdit);
+        heading->addWidget(idCard,0,Qt::AlignVCenter);
+        root->addLayout(heading);
 
-        QWidget *infoBody=nullptr; auto *info=formSection("Service Information","info",&infoBody); auto *infoGrid=new QGridLayout; infoGrid->setContentsMargins(0,0,0,0); infoGrid->setHorizontalSpacing(12); infoGrid->setVerticalSpacing(9); static_cast<QVBoxLayout *>(infoBody->layout())->addLayout(infoGrid);
-        idEdit=new QLineEdit(QString("SRV-%1").arg(serviceRecords.size()+1,3,10,QChar('0'))); idEdit->setReadOnly(true); idEdit->setProperty("readonly",true);
-        titleEdit=new QLineEdit; titleEdit->setPlaceholderText("Enter service title");
-        typeCombo=new QComboBox; typeCombo->addItems({"Maintenance","Calibration","Inspection","Repair","Connectivity","Software"});
-        stationCombo=new QComboBox; stationCombo->addItem("Select station");
-        const QStringList stationCodes{"ALP-03","COA-01","FOR-12","VAL-07","DES-05"}; const QStringList stationNames{"Alpine Ridge","Coastal Bay","Pine Forest","Green Valley","Desert View"};
-        for(int i=0;i<stationCodes.size();++i) { stationCombo->addItem(stationCodes[i]+"   "+stationNames[i]); stationCombo->setItemData(i+1,stationCodes[i],Qt::UserRole); stationCombo->setItemData(i+1,stationNames[i],Qt::UserRole+1); }
-        assigneeCombo=new QComboBox; assigneeCombo->addItems({"Select assignee","James Wilson","Sophie Chen","Miguel Santos","Emma Davis","Ryan Kim","Olivia Martinez"});
-        infoGrid->addWidget(formField("Service ID",idEdit,false),0,0); infoGrid->addWidget(formField("Title",titleEdit),0,1);
-        infoGrid->addWidget(formField("Type",typeCombo),1,0); infoGrid->addWidget(formField("Station",stationCombo),1,1);
-        infoGrid->addWidget(formField("Assignee",assigneeCombo),2,0); infoGrid->setColumnStretch(0,1); infoGrid->setColumnStretch(1,1); formLayout->addWidget(info);
+        auto *divider=new QFrame;
+        divider->setObjectName("serviceFormDivider");
+        divider->setFixedHeight(1);
+        root->addWidget(divider);
 
-        QWidget *scheduleBody=nullptr; auto *schedule=formSection("Schedule","calendar",&scheduleBody); auto *scheduleGrid=new QGridLayout; scheduleGrid->setContentsMargins(0,0,0,0); scheduleGrid->setHorizontalSpacing(12); static_cast<QVBoxLayout *>(scheduleBody->layout())->addLayout(scheduleGrid);
-        dateEdit=new QDateEdit(QDate(2025,4,24)); dateEdit->setDisplayFormat("MMM dd, yyyy"); dateEdit->setCalendarPopup(true); dateEdit->setFixedHeight(40);
-        startEdit=new QTimeEdit(QTime(8,0)); startEdit->setDisplayFormat("HH:mm"); startEdit->setFixedHeight(40);
-        endEdit=new QTimeEdit(QTime(10,0)); endEdit->setDisplayFormat("HH:mm"); endEdit->setFixedHeight(40);
-        scheduleGrid->addWidget(formField("Scheduled Date",dateEdit),0,0); scheduleGrid->addWidget(formField("Start Time",startEdit),0,1); scheduleGrid->addWidget(formField("End Time",endEdit),0,2);
-        for(int i=0;i<3;++i) scheduleGrid->setColumnStretch(i,1);
-        formLayout->addWidget(schedule);
+        auto *scroll=new QScrollArea;
+        scroll->setObjectName("serviceFormScroll");
+        scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame);
+        scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        auto *card=new QFrame;
+        card->setObjectName("serviceDetailsCard");
+        auto *cardLayout=new QVBoxLayout(card);
+        cardLayout->setContentsMargins(24,22,24,22);
+        cardLayout->setSpacing(14);
+        cardLayout->addWidget(text("Service details","serviceCardTitle"));
+        cardLayout->addWidget(text(editingMode?"Review and update the service assignment, schedule, and status.":"Choose the service type, station, schedule, and status.","dialogSubtitle"));
 
-        QWidget *priorityBody=nullptr; auto *priority=formSection("Priority & Status","check",&priorityBody); auto *priorityGrid=new QGridLayout; priorityGrid->setContentsMargins(0,0,0,0); priorityGrid->setHorizontalSpacing(12); static_cast<QVBoxLayout *>(priorityBody->layout())->addLayout(priorityGrid);
-        priorityCombo=new QComboBox; priorityCombo->addItems({"High","Medium","Low"}); priorityCombo->setCurrentText("Medium");
-        statusCombo=new QComboBox; statusCombo->addItems({"Scheduled","In Progress","Completed","Overdue"});
-        priorityGrid->addWidget(formField("Priority",priorityCombo),0,0); priorityGrid->addWidget(formField("Status",statusCombo),0,1); priorityGrid->setColumnStretch(0,1); priorityGrid->setColumnStretch(1,1); formLayout->addWidget(priority);
+        auto *detailsGrid=new QGridLayout;
+        detailsGrid->setContentsMargins(0,6,0,0);
+        detailsGrid->setHorizontalSpacing(18);
+        detailsGrid->setVerticalSpacing(14);
+        titleEdit=new QLineEdit;
+        titleEdit->setPlaceholderText("Enter service title");
+        typeCombo=selector({"Maintenance","Calibration","Inspection","Repair","Connectivity","Software"});
+        stationCombo=selector({"Select station"});
+        const QStringList stationCodes{"ALP-03","COA-01","FOR-12","VAL-07","DES-05"};
+        const QStringList stationNames{"Alpine Ridge","Coastal Bay","Pine Forest","Green Valley","Desert View"};
+        for(int i=0;i<stationCodes.size();++i) {
+            stationCombo->addItem(stationCodes[i]+" — "+stationNames[i]);
+            stationCombo->setItemData(i+1,stationCodes[i],Qt::UserRole);
+            stationCombo->setItemData(i+1,stationNames[i],Qt::UserRole+1);
+        }
+        assigneeCombo=selector({"Select assignee","James Wilson","Sophie Chen","Miguel Santos","Emma Davis","Ryan Kim","Olivia Martinez"});
+        dateEdit=new QDateEdit(QDate(2025,4,24)); dateEdit->setDisplayFormat("MMM dd, yyyy"); dateEdit->setCalendarPopup(true); dateEdit->setFixedHeight(48);
+        startEdit=new QTimeEdit(QTime(8,0)); startEdit->setDisplayFormat("HH:mm"); startEdit->setFixedHeight(48);
+        endEdit=new QTimeEdit(QTime(10,0)); endEdit->setDisplayFormat("HH:mm"); endEdit->setFixedHeight(48);
+        priorityCombo=selector({"High","Medium","Low"}); priorityCombo->setCurrentText("Medium");
+        statusCombo=selector({"Scheduled","In Progress","Completed","Overdue"});
+        if(existing) {
+            titleEdit->setText(existing->title);
+            typeCombo->setCurrentText(existing->type);
+            for(int i=1;i<stationCombo->count();++i) if(stationCombo->itemData(i,Qt::UserRole).toString()==existing->stationCode) stationCombo->setCurrentIndex(i);
+            assigneeCombo->setCurrentText(existing->assignee);
+            const QDate savedDate=QDate::fromString(existing->date,"MMM dd, yyyy"); if(savedDate.isValid()) dateEdit->setDate(savedDate);
+            const QTime savedStart=QTime::fromString(existing->startTime,"HH:mm"); if(savedStart.isValid()) startEdit->setTime(savedStart);
+            const QTime savedEnd=QTime::fromString(existing->endTime,"HH:mm"); if(savedEnd.isValid()) endEdit->setTime(savedEnd);
+            priorityCombo->setCurrentText(existing->priority);
+            statusCombo->setCurrentText(existing->status);
+        }
+        detailsGrid->addWidget(formField("Title",titleEdit),0,0);
+        detailsGrid->addWidget(formField("Type",typeCombo),0,1);
+        detailsGrid->addWidget(formField("Station",stationCombo),1,0);
+        detailsGrid->addWidget(formField("Assignee",assigneeCombo),1,1);
+        detailsGrid->addWidget(formField("Scheduled Date",dateEdit),2,0);
+        detailsGrid->addWidget(formField("Start Time",startEdit),2,1);
+        detailsGrid->addWidget(formField("End Time",endEdit),2,2);
+        detailsGrid->addWidget(formField("Priority",priorityCombo),3,0);
+        detailsGrid->addWidget(formField("Status",statusCombo),3,1);
+        for(int column=0;column<3;++column) detailsGrid->setColumnStretch(column,1);
+        cardLayout->addLayout(detailsGrid);
 
-        QWidget *descriptionBody=nullptr; auto *description=formSection("Description","description",&descriptionBody); descriptionEdit=new QTextEdit; descriptionEdit->setPlaceholderText("Enter service description..."); descriptionEdit->setMaximumHeight(60);
-        auto *descriptionRow=new QHBoxLayout; descriptionRow->addWidget(descriptionEdit,1); auto *descriptionLayout=static_cast<QVBoxLayout *>(descriptionBody->layout()); descriptionLayout->addLayout(descriptionRow);
-        descriptionCount=text("0/500","characterCount"); descriptionCount->setAlignment(Qt::AlignRight); descriptionLayout->addWidget(descriptionCount);
+        descriptionEdit=new QTextEdit;
+        descriptionEdit->setPlaceholderText("Enter service description...");
+        descriptionEdit->setMinimumHeight(74);
+        descriptionEdit->setMaximumHeight(92);
+        if(existing) descriptionEdit->setPlainText(existing->description);
+        auto *descriptionField=new QVBoxLayout;
+        descriptionField->setSpacing(5);
+        descriptionField->addWidget(text("Description","fieldLabel"));
+        descriptionField->addWidget(descriptionEdit);
+        descriptionCount=text(QString("%1/500").arg(descriptionEdit->toPlainText().size()),"characterCount");
+        descriptionCount->setAlignment(Qt::AlignRight);
+        descriptionField->addWidget(descriptionCount);
+        cardLayout->addLayout(descriptionField);
         connect(descriptionEdit,&QTextEdit::textChanged,this,[this]() {
             QString value=descriptionEdit->toPlainText();
             if(value.size()>500) { value.truncate(500); descriptionEdit->setPlainText(value); }
             descriptionCount->setText(QString("%1/500").arg(value.size()));
-        }); formLayout->addWidget(description);
+        });
 
-        QWidget *checklistBody=nullptr; auto *checklistSection=formSection("Service Checklist","checklist",&checklistBody); checklistLayout=new QVBoxLayout; checklistLayout->setContentsMargins(0,0,0,0); checklistLayout->setSpacing(5); auto *checklistBodyLayout=static_cast<QVBoxLayout *>(checklistBody->layout()); checklistBodyLayout->addLayout(checklistLayout);
-        addChecklistRow("Check equipment status and perform visual inspection"); addChecklistRow("Calibrate sensors and verify readings"); addChecklistRow("Update maintenance logs and reports");
-        auto *addCheck=button("Add checklist item","plus"); addCheck->setProperty("link",true); addCheck->setFixedHeight(32); connect(addCheck,&QPushButton::clicked,this,[this]() { addChecklistRow(QString()); }); checklistBodyLayout->addWidget(addCheck); formLayout->addWidget(checklistSection); formLayout->addStretch();
-        scroll->setWidget(form); columns->addWidget(scroll,3);
+        cardLayout->addWidget(text("Service Checklist","formSectionTitle"));
+        checklistLayout=new QVBoxLayout;
+        checklistLayout->setContentsMargins(0,0,0,0);
+        checklistLayout->setSpacing(7);
+        cardLayout->addLayout(checklistLayout);
+        if(existing) {
+            for(const QString &item:existing->checklist) addChecklistRow(item);
+        } else {
+            addChecklistRow("Check equipment status and perform visual inspection");
+            addChecklistRow("Calibrate sensors and verify readings");
+            addChecklistRow("Update maintenance logs and reports");
+        }
+        auto *addCheck=button("Add checklist item","plus");
+        addCheck->setProperty("link",true);
+        addCheck->setFixedHeight(34);
+        connect(addCheck,&QPushButton::clicked,this,[this]() { addChecklistRow(QString()); });
+        cardLayout->addWidget(addCheck,0,Qt::AlignLeft);
+        scroll->setWidget(card);
 
-        auto *summary=new QFrame; summary->setObjectName("serviceSummary"); summary->setMinimumWidth(240); summary->setMaximumWidth(290); auto *summaryLayout=new QVBoxLayout(summary); summaryLayout->setContentsMargins(16,14,16,14); summaryLayout->setSpacing(8);
-        auto *stationHeading=new QHBoxLayout; stationHeading->addWidget(new Glyph("info",blue,26)); stationHeading->addWidget(text("Station Information","detailTitle")); stationHeading->addStretch(); summaryLayout->addLayout(stationHeading);
-        auto *stationLine=new QHBoxLayout; stationLine->addWidget(new Glyph("pin",blue,27)); auto *stationCopy=new QVBoxLayout; stationCopy->setSpacing(1); stationCodePreview=text("ALP-03","summaryStrong"); stationNamePreview=text("Alpine Ridge","summaryText"); stationCopy->addWidget(stationCodePreview); stationCopy->addWidget(stationNamePreview); stationLine->addLayout(stationCopy,1); summaryLayout->addLayout(stationLine);
-        auto *separator=new QFrame; separator->setFrameShape(QFrame::HLine); separator->setProperty("role","formSeparator"); summaryLayout->addWidget(separator);
-        auto *selectedHeading=new QHBoxLayout; selectedHeading->addWidget(new Glyph("calendar",blue,26)); selectedHeading->addWidget(text("Selected Date & Time","detailTitle")); selectedHeading->addStretch(); summaryLayout->addLayout(selectedHeading);
-        auto *dateLine=new QHBoxLayout; dateLine->addWidget(new Glyph("calendar",blue,24)); datePreview=text("Apr 24, 2025","summaryText"); dateLine->addWidget(datePreview,1); summaryLayout->addLayout(dateLine);
-        auto *timeLine=new QHBoxLayout; timeLine->addWidget(new Glyph("clock",blue,24)); timePreview=text("08:00 – 10:00","summaryText"); timeLine->addWidget(timePreview,1); summaryLayout->addLayout(timeLine); summaryLayout->addStretch();
-        columns->addWidget(summary,1); root->addLayout(columns,1);
+        if(editingMode) {
+            auto *columns=new QHBoxLayout;
+            columns->setSpacing(14);
+            columns->addWidget(scroll,3);
+            auto *summary=new QFrame;
+            summary->setObjectName("serviceSummary");
+            summary->setMinimumWidth(245);
+            summary->setMaximumWidth(320);
+            auto *summaryLayout=new QVBoxLayout(summary);
+            summaryLayout->setContentsMargins(18,18,18,18);
+            summaryLayout->setSpacing(13);
+            auto *stationHeading=new QHBoxLayout;
+            stationHeading->addWidget(new Glyph("pin",blue,42,true));
+            stationHeading->addWidget(text("Station Information","detailTitle"));
+            stationHeading->addStretch();
+            summaryLayout->addLayout(stationHeading);
+            stationCodePreview=text(existing->stationCode,"summaryStrong");
+            stationNamePreview=text(existing->stationName,"summaryText");
+            summaryLayout->addWidget(stationCodePreview);
+            summaryLayout->addWidget(stationNamePreview);
+            auto *separator=new QFrame; separator->setFrameShape(QFrame::HLine); separator->setProperty("role","formSeparator"); summaryLayout->addWidget(separator);
+            summaryLayout->addWidget(text("Selected Date & Time","detailTitle"));
+            datePreview=text(dateEdit->date().toString("MMM dd, yyyy"),"summaryText");
+            timePreview=text(startEdit->time().toString("HH:mm")+" – "+endEdit->time().toString("HH:mm"),"summaryText");
+            summaryLayout->addWidget(datePreview);
+            summaryLayout->addWidget(timePreview);
+            summaryLayout->addStretch();
+            columns->addWidget(summary,1);
+            root->addLayout(columns,1);
+            connect(stationCombo,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]() { updateSummary(); });
+            connect(dateEdit,&QDateEdit::dateChanged,this,[this]() { updateSummary(); });
+            connect(startEdit,&QTimeEdit::timeChanged,this,[this]() { updateSummary(); });
+            connect(endEdit,&QTimeEdit::timeChanged,this,[this]() { updateSummary(); });
+        } else {
+            root->addWidget(scroll,1);
+        }
 
-        auto *footer=new QHBoxLayout; footer->addStretch(); auto *cancel=button("Cancel",""); cancel->setObjectName("cancelService"); auto *create=button("Create Service","plus",true); create->setObjectName("createService"); footer->addWidget(cancel); footer->addWidget(create); root->addLayout(footer);
-        connect(cancel,&QPushButton::clicked,this,&QDialog::reject); connect(create,&QPushButton::clicked,this,&AddServiceDialog::createService);
-        connect(stationCombo,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]() { updateSummary(); });
-        connect(dateEdit,&QDateEdit::dateChanged,this,[this]() { updateSummary(); });
-        connect(startEdit,&QTimeEdit::timeChanged,this,[this]() { updateSummary(); }); connect(endEdit,&QTimeEdit::timeChanged,this,[this]() { updateSummary(); });
-        updateSummary();
+        auto *footer=new QHBoxLayout;
+        auto *cancel=button("Cancel",""); cancel->setObjectName("cancelService");
+        if(editingMode) {
+            auto *remove=button("Delete","trash"); remove->setObjectName("deleteEditedService");
+            footer->addStretch();
+            footer->addWidget(remove);
+            auto *save=button("Save Changes","check",true); save->setObjectName("createService");
+            footer->addWidget(cancel); footer->addWidget(save);
+            connect(remove,&QPushButton::clicked,this,[this]() {
+                if(confirmDeleteService(this,service())) {
+                    deleteRequestedFlag=true; accept();
+                }
+            });
+            connect(save,&QPushButton::clicked,this,&AddServiceDialog::createService);
+        } else {
+            footer->addWidget(text("The new service will appear in the Services list.","dialogSubtitle"),1);
+            auto *create=button("Add Service","plus",true); create->setObjectName("createService");
+            footer->addWidget(cancel); footer->addWidget(create);
+            connect(create,&QPushButton::clicked,this,&AddServiceDialog::createService);
+        }
+        root->addLayout(footer);
+        connect(cancel,&QPushButton::clicked,this,&QDialog::reject);
     }
 
     ServiceRecord service() const {
-        ServiceRecord record; record.id=idEdit->text().trimmed(); record.title=titleEdit->text().trimmed(); record.type=typeCombo->currentText();
-        record.stationCode=stationCombo->currentData(Qt::UserRole).toString(); record.stationName=stationCombo->currentData(Qt::UserRole+1).toString();
-        record.assignee=assigneeCombo->currentText(); record.date=dateEdit->date().toString("MMM dd, yyyy"); record.startTime=startEdit->time().toString("HH:mm"); record.endTime=endEdit->time().toString("HH:mm");
-        record.priority=priorityCombo->currentText(); record.status=statusCombo->currentText(); record.description=descriptionEdit->toPlainText(); record.checklist=checklistItems; return record;
+        ServiceRecord record;
+        record.id=idEdit->text().trimmed();
+        record.title=titleEdit->text().trimmed();
+        record.type=typeCombo->currentText();
+        record.stationCode=stationCombo->currentData(Qt::UserRole).toString();
+        record.stationName=stationCombo->currentData(Qt::UserRole+1).toString();
+        record.assignee=assigneeCombo->currentText();
+        record.date=dateEdit->date().toString("MMM dd, yyyy");
+        record.startTime=startEdit->time().toString("HH:mm");
+        record.endTime=endEdit->time().toString("HH:mm");
+        record.priority=priorityCombo->currentText();
+        record.status=statusCombo->currentText();
+        record.description=descriptionEdit->toPlainText();
+        record.checklist=checklistItems;
+        return record;
     }
+    bool deleteRequested() const { return deleteRequestedFlag; }
 private:
-    void addChecklistRow(const QString &value) {
-        auto *row=new QWidget; row->setProperty("role","checklistRow"); auto *layout=new QHBoxLayout(row); layout->setContentsMargins(5,1,5,1); layout->setSpacing(5);
-        auto *done=new QCheckBox; auto *item=new QLineEdit(value); item->setPlaceholderText("Enter checklist item"); item->setProperty("checklistInput",true);
-        auto *drag=new QLabel(QString::fromUtf8("⠿")); drag->setProperty("role","dragHandle"); auto *remove=new QPushButton(QString::fromUtf8("⌫")); remove->setProperty("role","removeChecklist"); remove->setFixedSize(26,26);
-        layout->addWidget(done); layout->addWidget(item,1); layout->addWidget(drag); layout->addWidget(remove); checklistLayout->addWidget(row);
-        connect(remove,&QPushButton::clicked,this,[this,row]() { checklistLayout->removeWidget(row); row->deleteLater(); });
-    }
     void updateSummary() {
-        if(stationCombo->currentIndex()>0) { stationCodePreview->setText(stationCombo->currentData(Qt::UserRole).toString()); stationNamePreview->setText(stationCombo->currentData(Qt::UserRole+1).toString()); }
-        else { stationCodePreview->setText("ALP-03"); stationNamePreview->setText("Alpine Ridge"); }
-        datePreview->setText(dateEdit->date().toString("MMM dd, yyyy")); timePreview->setText(startEdit->time().toString("HH:mm")+" – "+endEdit->time().toString("HH:mm"));
+        const int index=stationCombo->currentIndex();
+        if(index>0) {
+            stationCodePreview->setText(stationCombo->currentData(Qt::UserRole).toString());
+            stationNamePreview->setText(stationCombo->currentData(Qt::UserRole+1).toString());
+        }
+        datePreview->setText(dateEdit->date().toString("MMM dd, yyyy"));
+        timePreview->setText(startEdit->time().toString("HH:mm")+" – "+endEdit->time().toString("HH:mm"));
+    }
+    void addChecklistRow(const QString &value) {
+        auto *row=new QWidget;
+        row->setProperty("role","checklistRow");
+        auto *layout=new QHBoxLayout(row);
+        layout->setContentsMargins(8,3,8,3);
+        layout->setSpacing(8);
+        auto *done=new QCheckBox;
+        auto *item=new QLineEdit(value);
+        item->setPlaceholderText("Enter checklist item");
+        item->setProperty("checklistInput",true);
+        auto *remove=new QPushButton(QString::fromUtf8("×"));
+        remove->setProperty("role","removeChecklist");
+        remove->setFixedSize(28,28);
+        layout->addWidget(done);
+        layout->addWidget(item,1);
+        layout->addWidget(remove);
+        checklistLayout->addWidget(row);
+        connect(remove,&QPushButton::clicked,this,[this,row]() { playClickSound(); checklistLayout->removeWidget(row); row->deleteLater(); });
     }
     void createService() {
         if(titleEdit->text().trimmed().isEmpty()) { QMessageBox::warning(this,"Service title required","Enter a title for this service."); titleEdit->setFocus(); return; }
@@ -455,12 +731,234 @@ private:
         for(int i=0;i<checklistLayout->count();++i) {
             auto *row=checklistLayout->itemAt(i)->widget();
             if(!row) continue;
-            auto *edit=row->findChild<QLineEdit *>(); if(edit && !edit->text().trimmed().isEmpty()) checklistItems.append(edit->text().trimmed());
+            auto *edit=row->findChild<QLineEdit *>();
+            if(edit && !edit->text().trimmed().isEmpty()) checklistItems.append(edit->text().trimmed());
         }
         accept();
     }
 };
+class DeleteServiceDialog final : public QDialog {
+public:
+    explicit DeleteServiceDialog(QWidget *parent,const ServiceRecord &record):QDialog(parent) {
+        setObjectName("deleteServiceDialog");
+        setWindowTitle("Delete Service — SkySense");
+        setWindowModality(Qt::WindowModal);
+        setWindowFlags(Qt::Dialog|Qt::FramelessWindowHint);
+        setAttribute(Qt::WA_TranslucentBackground);
+        QScreen *screen=parent?QApplication::screenAt(parent->mapToGlobal(parent->rect().center())):QApplication::primaryScreen();
+        if(!screen) screen=QApplication::primaryScreen();
+        const QRect available=screen?screen->availableGeometry():QRect(0,0,1280,800);
+        const int maxWidth=qMax(760,available.width()-64);
+        const int maxHeight=qMax(600,available.height()-90);
+        setMaximumSize(maxWidth,maxHeight);
+        setMinimumSize(qMin(900,maxWidth),qMin(620,maxHeight));
+        resize(qMin(1080,maxWidth),qMin(820,maxHeight));
+        QFile stylesheet(":/styles/services.qss");
+        if(stylesheet.open(QIODevice::ReadOnly)) setStyleSheet(QString::fromUtf8(stylesheet.readAll()));
+        auto *shadow=new QGraphicsDropShadowEffect(this);
+        shadow->setBlurRadius(24); shadow->setOffset(0,8); shadow->setColor(QColor(8,26,58,75));
+        setGraphicsEffect(shadow);
 
+        auto *root=new QVBoxLayout(this);
+        root->setContentsMargins(20,18,20,18);
+        root->setSpacing(14);
+        auto *surface=new QWidget;
+        surface->setObjectName("deleteServiceSurface");
+        auto *surfaceLayout=new QVBoxLayout(surface);
+        surfaceLayout->setContentsMargins(22,18,22,18);
+        surfaceLayout->setSpacing(14);
+
+        auto *heading=new QHBoxLayout;
+        heading->setSpacing(18);
+        heading->addWidget(new Glyph("trash",QColor("#ff4055"),72,true));
+        auto *headingCopy=new QVBoxLayout;
+        headingCopy->setSpacing(3);
+        headingCopy->addWidget(text("Delete Service","deleteDialogTitle"));
+        headingCopy->addWidget(text("Are you sure you want to delete this service? This action cannot be undone.","dialogSubtitle"));
+        heading->addLayout(headingCopy,1);
+        auto *close=new QPushButton(QString::fromUtf8("×"));
+        close->setObjectName("dialogClose");
+        close->setFixedSize(36,36);
+        close->setCursor(Qt::PointingHandCursor);
+        heading->addWidget(close,0,Qt::AlignTop);
+        surfaceLayout->addLayout(heading);
+        connect(close,&QPushButton::clicked,this,[this]() { playClickSound(); reject(); });
+        auto *divider=new QFrame; divider->setObjectName("serviceFormDivider"); divider->setFixedHeight(1); surfaceLayout->addWidget(divider);
+
+        auto *columns=new QHBoxLayout;
+        columns->setSpacing(16);
+        auto *scroll=new QScrollArea;
+        scroll->setObjectName("serviceFormScroll");
+        scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame);
+        scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        auto *details=new QFrame;
+        details->setObjectName("deleteServiceDetailsCard");
+        auto *detailsLayout=new QVBoxLayout(details);
+        detailsLayout->setContentsMargins(18,14,18,16);
+        detailsLayout->setSpacing(12);
+        auto *detailsHeading=new QHBoxLayout;
+        detailsHeading->addWidget(new Glyph("description",blue,24));
+        detailsHeading->addWidget(text("Service Details","formSectionTitle"));
+        detailsHeading->addStretch();
+        detailsLayout->addLayout(detailsHeading);
+
+        auto *grid=new QGridLayout;
+        grid->setContentsMargins(0,0,0,0);
+        grid->setHorizontalSpacing(20);
+        grid->setVerticalSpacing(10);
+        auto addValue=[&](const QString &label,const QString &value,int row,int col,int span=1) {
+            auto *block=new QWidget;
+            auto *layout=new QVBoxLayout(block);
+            layout->setContentsMargins(0,0,0,0);
+            layout->setSpacing(3);
+            layout->addWidget(text(label,"smallMuted"));
+            layout->addWidget(text(value.isEmpty()?"—":value,"smallValue"));
+            grid->addWidget(block,row,col,1,span);
+        };
+        addValue("Service ID",record.id,0,0);
+        addValue("Title",record.title,0,1);
+        addValue("Type",record.type,1,0);
+        addValue("Station",record.stationCode+" — "+record.stationName,1,1);
+        addValue("Assignee",record.assignee,2,0,2);
+        detailsLayout->addLayout(grid);
+        auto *scheduleDivider=new QFrame; scheduleDivider->setProperty("role","formSeparator"); scheduleDivider->setFixedHeight(1); detailsLayout->addWidget(scheduleDivider);
+        auto *schedule=new QGridLayout;
+        schedule->setContentsMargins(0,0,0,0);
+        schedule->setHorizontalSpacing(18);
+        auto addSchedule=[&](const QString &label,const QString &value,int col) {
+            auto *block=new QWidget;
+            auto *layout=new QVBoxLayout(block);
+            layout->setContentsMargins(0,0,0,0);
+            layout->setSpacing(3);
+            layout->addWidget(text(label,"smallMuted"));
+            layout->addWidget(text(value,"smallValue"));
+            schedule->addWidget(block,0,col);
+        };
+        addSchedule("Scheduled Date",record.date,0);
+        addSchedule("Start Time",record.startTime,1);
+        addSchedule("End Time",record.endTime,2);
+        detailsLayout->addLayout(schedule);
+        auto *statusGrid=new QGridLayout;
+        statusGrid->setContentsMargins(0,0,0,0);
+        statusGrid->setHorizontalSpacing(20);
+        auto addStatus=[&](const QString &label,const QString &value,int col) {
+            auto *block=new QWidget;
+            auto *layout=new QVBoxLayout(block);
+            layout->setContentsMargins(0,0,0,0);
+            layout->setSpacing(3);
+            layout->addWidget(text(label,"smallMuted"));
+            layout->addWidget(text(value,"smallValue"));
+            statusGrid->addWidget(block,0,col);
+        };
+        addStatus("Priority",record.priority,0);
+        addStatus("Status",record.status,1);
+        detailsLayout->addWidget(new QFrame);
+        detailsLayout->addLayout(statusGrid);
+        auto *descriptionDivider=new QFrame; descriptionDivider->setProperty("role","formSeparator"); descriptionDivider->setFixedHeight(1); detailsLayout->addWidget(descriptionDivider);
+        detailsLayout->addWidget(text("Description","smallMuted"));
+        detailsLayout->addWidget(text(record.description.isEmpty()?"—":record.description,"smallValue"));
+        auto *checkHeading=new QHBoxLayout;
+        checkHeading->addWidget(new Glyph("checklist",blue,21));
+        checkHeading->addWidget(text("Service Checklist","formSectionTitle"));
+        checkHeading->addStretch();
+        detailsLayout->addLayout(checkHeading);
+        if(record.checklist.isEmpty()) {
+            detailsLayout->addWidget(text("—","smallMuted"));
+        } else {
+            for(const QString &item:record.checklist) {
+                auto *row=new QHBoxLayout;
+                row->addWidget(new Glyph("check",blue,18));
+                row->addWidget(text(item,"smallValue"),1);
+                detailsLayout->addLayout(row);
+            }
+        }
+        scroll->setWidget(details);
+        columns->addWidget(scroll,3);
+
+        auto *side=new QVBoxLayout;
+        side->setSpacing(14);
+        auto *station=new QFrame;
+        station->setObjectName("serviceSummary");
+        station->setMinimumWidth(230);
+        station->setMaximumWidth(300);
+        auto *stationLayout=new QVBoxLayout(station);
+        stationLayout->setContentsMargins(16,16,16,16);
+        stationLayout->setSpacing(9);
+        auto *stationHeading=new QHBoxLayout;
+        stationHeading->addWidget(new Glyph("pin",blue,30));
+        stationHeading->addWidget(text("Station Information","detailTitle"));
+        stationHeading->addStretch();
+        stationLayout->addLayout(stationHeading);
+        stationLayout->addWidget(text(record.stationCode,"summaryStrong"));
+        stationLayout->addWidget(text(record.stationName,"summaryText"));
+        auto *sideDivider=new QFrame; sideDivider->setProperty("role","formSeparator"); sideDivider->setFixedHeight(1); stationLayout->addWidget(sideDivider);
+        auto *timeHeading=new QHBoxLayout;
+        timeHeading->addWidget(new Glyph("calendar",blue,26));
+        timeHeading->addWidget(text("Selected Date & Time","detailTitle"));
+        timeHeading->addStretch();
+        stationLayout->addLayout(timeHeading);
+        stationLayout->addWidget(text(record.date,"summaryText"));
+        stationLayout->addWidget(text(record.startTime+" – "+record.endTime,"summaryText"));
+        side->addWidget(station);
+
+        auto *warning=new QWidget;
+        warning->setObjectName("deleteServiceWarning");
+        auto *warningLayout=new QVBoxLayout(warning);
+        warningLayout->setContentsMargins(14,12,14,12);
+        warningLayout->setSpacing(7);
+        auto *warningTitle=new QHBoxLayout;
+        warningTitle->addWidget(new Glyph("warning",QColor("#f04455"),25));
+        warningTitle->addWidget(text("This action is permanent","deleteWarningTitle"));
+        warningTitle->addStretch();
+        warningLayout->addLayout(warningTitle);
+        warningLayout->addWidget(text("The service will be removed from the list and cannot be recovered.","smallMuted"));
+        side->addWidget(warning);
+        side->addStretch();
+        columns->addLayout(side,1);
+        surfaceLayout->addLayout(columns,1);
+
+        auto *footer=new QHBoxLayout;
+        footer->addStretch();
+        auto *cancel=button("Cancel",""); cancel->setObjectName("cancelService");
+        auto *confirm=button("Delete Service","trash"); confirm->setObjectName("confirmDeleteService");
+        footer->addWidget(cancel);
+        footer->addWidget(confirm);
+        surfaceLayout->addLayout(footer);
+        connect(cancel,&QPushButton::clicked,this,&QDialog::reject);
+        connect(confirm,&QPushButton::clicked,this,&QDialog::accept);
+        root->addWidget(surface);
+    }
+};
+
+bool confirmDeleteService(QWidget *parent,const ServiceRecord &record)
+{
+    if(!parent) return false;
+    auto *overlay=new QWidget(parent);
+    overlay->setObjectName("modalDimmer");
+    overlay->setAttribute(Qt::WA_StyledBackground,true);
+    overlay->setStyleSheet("background:rgba(8,26,58,145)");
+    overlay->setGeometry(parent->rect());
+    overlay->show();
+    overlay->raise();
+    DeleteServiceDialog dialog(parent,record);
+    dialog.setWindowOpacity(0.0);
+    QTimer::singleShot(0,&dialog,[&dialog]() {
+        auto *fade=new QPropertyAnimation(&dialog,"windowOpacity",&dialog);
+        fade->setDuration(240);
+        fade->setStartValue(0.0);
+        fade->setEndValue(1.0);
+        fade->setEasingCurve(QEasingCurve::OutCubic);
+        fade->start(QAbstractAnimation::DeleteWhenStopped);
+    });
+    const QPoint center=parent->mapToGlobal(parent->rect().center());
+    dialog.move(center-QPoint(dialog.width()/2,dialog.height()/2));
+    dialog.raise();
+    const bool confirmed=dialog.exec()==QDialog::Accepted;
+    overlay->hide();
+    overlay->deleteLater();
+    return confirmed;
+}
 QWidget *detailInfo()
 {
     auto *box=new QWidget; auto *v=new QVBoxLayout(box); v->setContentsMargins(0,0,0,0); v->setSpacing(5);
@@ -494,11 +992,17 @@ QWidget *stationInfo()
 
 class ServicesPage final : public QWidget {
     QGridLayout *detailGrid=nullptr; QList<QWidget *> detailPanels; QVBoxLayout *body=nullptr; ServiceTable *serviceTable=nullptr; int detailColumns=0;
+    QLineEdit *filterSearch=nullptr,*globalSearch=nullptr;
+    QComboBox *typeFilter=nullptr,*stationFilter=nullptr,*statusFilter=nullptr;
+    QWidget *emptyState=nullptr;
+    QVector<QLabel *> metricCounts;
+    QVector<QWidget *> introWidgets;
+    bool introStarted=false;
 public:
     explicit ServicesPage(QWidget *parent):QWidget(parent) {
         setObjectName("servicesPage"); auto *outer=new QVBoxLayout(this); outer->setContentsMargins(0,0,0,0); outer->setSpacing(0);
-        auto *top=card("topbar"); auto *bar=new QHBoxLayout(top); bar->setContentsMargins(28,10,24,10); bar->setSpacing(16);
-        auto *global=search("Search services by ID, title, station, or assignee..."); global->setMaximumWidth(540); bar->addWidget(global,1); bar->addStretch();
+        auto *top=card("topbar"); introWidgets.append(top); auto *bar=new QHBoxLayout(top); bar->setContentsMargins(28,10,24,10); bar->setSpacing(16);
+        globalSearch=search("Search services by ID, title, station, or assignee..."); globalSearch->setMaximumWidth(540); bar->addWidget(globalSearch,1); bar->addStretch();
         bar->addWidget(new Glyph("calendar",navy,24)); bar->addWidget(text("Thu, Apr 24, 2025","topDate")); bar->addWidget(new Glyph("down",muted,18));
         auto *divider=new QFrame; divider->setProperty("role","divider"); divider->setFixedSize(1,35); bar->addWidget(divider); bar->addWidget(new Glyph("user",muted,40,true));
         auto *user=new QVBoxLayout; user->setSpacing(1); user->addWidget(text("Alex Martin","detailTitle")); user->addWidget(text("Operations Manager","smallMuted")); bar->addLayout(user); bar->addWidget(new Glyph("down",navy,18)); outer->addWidget(top);
@@ -506,40 +1010,144 @@ public:
         auto *scroll=new QScrollArea; scroll->setObjectName("servicesScroll"); scroll->setWidgetResizable(true); scroll->setFrameShape(QFrame::NoFrame); scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); outer->addWidget(scroll,1);
         auto *content=new QWidget; content->setObjectName("servicesContent"); body=new QVBoxLayout(content); body->setContentsMargins(28,16,24,8); body->setSpacing(10); body->setSizeConstraint(QLayout::SetMinimumSize);
 
-        auto *header=new QHBoxLayout; auto *copy=new QVBoxLayout; copy->setSpacing(0); copy->addWidget(text("Services","pageTitle")); copy->addWidget(text("Manage and track field services, maintenance visits, and support activities.","subtitle")); header->addLayout(copy,1); header->addSpacing(12); header->addWidget(button("Export PDF","export")); auto *addButton=button("Add Service","plus",true); header->addWidget(addButton); body->addLayout(header);
+        auto *headerWidget=new QWidget; introWidgets.append(headerWidget); auto *header=new QHBoxLayout(headerWidget); header->setContentsMargins(0,0,0,0); auto *copy=new QVBoxLayout; copy->setSpacing(0); copy->addWidget(text("Services","pageTitle")); copy->addWidget(text("Manage and track field services, maintenance visits, and support activities.","subtitle")); header->addLayout(copy,1); header->addSpacing(12);
+        header->addWidget(button("Export PDF","export"));
+        auto *deleteButton=button("Delete","trash"); deleteButton->setObjectName("deleteServiceAction"); header->addWidget(deleteButton);
+        auto *editButton=button("Edit","edit"); editButton->setObjectName("editServiceAction"); header->addWidget(editButton);
+        auto *addButton=button("Add Service","plus",true); header->addWidget(addButton); body->addWidget(headerWidget);
 
-        auto *metrics=new QHBoxLayout; metrics->setSpacing(12);
-        metrics->addWidget(metricCard("Total Services","46","/ 50 this month","+12% from last month","wrench",blue,"blue"),1);
-        metrics->addWidget(metricCard("Completed","32","/ 50 this month","+18% from last month","check",QColor("#00b863"),"green"),1);
-        metrics->addWidget(metricCard("In Progress","8","/ 50 this month","+2% from last month","clock",QColor("#ff3859"),"red"),1);
-        metrics->addWidget(metricCard("Overdue","6","/ 50 this month","+3 from last month","camera",QColor("#7948ff"),"purple"),1); body->addLayout(metrics);
+        auto *metricsWidget=new QWidget; auto *metrics=new QHBoxLayout(metricsWidget); metrics->setContentsMargins(0,0,0,0); metrics->setSpacing(12);
+        for(QWidget *metric:{metricCard("Total Services","46","/ 50 this month","+12% from last month","wrench",blue,"blue"),metricCard("Completed","32","/ 50 this month","+18% from last month","check",QColor("#00b863"),"green"),metricCard("In Progress","8","/ 50 this month","+2% from last month","clock",QColor("#ff3859"),"red"),metricCard("Overdue","6","/ 50 this month","+3 from last month","camera",QColor("#7948ff"),"purple")}) {
+            metrics->addWidget(metric,1); introWidgets.append(metric);
+            QLabel *countLabel=nullptr;
+            const auto labels=metric->findChildren<QLabel *>();
+            for(QLabel *label:labels) {
+                if(label->property("role").toString()=="metricCount") countLabel=label;
+            }
+            metricCounts.append(countLabel);
+        }
+        body->addWidget(metricsWidget);
 
-        auto *filters=new QHBoxLayout; filters->setSpacing(10); filters->addWidget(search("Search by ID, title, station, or assignee..."),3);
-        filters->addWidget(selector({"All Types","Maintenance","Calibration","Inspection","Repair","Connectivity","Software"}),1);
-        filters->addWidget(selector({"All Stations","ALP-03","COA-01","FOR-12","VAL-07","DES-05"}),1);
-        filters->addWidget(selector({"All Statuses","In Progress","Scheduled","Completed","Overdue"}),1);
-        auto *clear=button("Clear",""); clear->setProperty("link",true); filters->addWidget(clear); body->addLayout(filters);
+        auto *filtersWidget=new QWidget; introWidgets.append(filtersWidget); auto *filters=new QHBoxLayout(filtersWidget); filters->setContentsMargins(0,0,0,0); filters->setSpacing(10); filterSearch=search("Search by ID, title, station, or assignee..."); filters->addWidget(filterSearch,3);
+        typeFilter=selector({"All Types","Maintenance","Calibration","Inspection","Repair","Connectivity","Software"}); filters->addWidget(typeFilter,1);
+        stationFilter=selector({"All Stations","ALP-03","COA-01","FOR-12","VAL-07","DES-05"}); filters->addWidget(stationFilter,1);
+        statusFilter=selector({"All Statuses","In Progress","Scheduled","Completed","Overdue"}); filters->addWidget(statusFilter,1);
+        auto *clear=button("Clear",""); clear->setProperty("link",true); filters->addWidget(clear); body->addWidget(filtersWidget);
         serviceTable=new ServiceTable; body->addWidget(serviceTable);
+        emptyState=new QWidget; emptyState->setObjectName("servicesEmptyState"); emptyState->setMinimumHeight(190); emptyState->setVisible(false);
+        auto *emptyLayout=new QVBoxLayout(emptyState); emptyLayout->setContentsMargins(20,20,20,20); emptyLayout->setSpacing(7); emptyLayout->setAlignment(Qt::AlignCenter);
+        auto *emptyIcon=new Glyph("search",QColor("#7d99c0"),36,true); emptyLayout->addWidget(emptyIcon,0,Qt::AlignCenter);
+        emptyLayout->addWidget(text("No services found","emptyStateTitle"),0,Qt::AlignCenter);
+        emptyLayout->addWidget(text("Try a different search or adjust your filters.","smallMuted"),0,Qt::AlignCenter);
+        auto *emptyClear=button("Clear filters",""); emptyClear->setProperty("link",true); emptyLayout->addWidget(emptyClear,0,Qt::AlignCenter); body->addWidget(emptyState);
+        auto applyFilters=[this]() {
+            if(!serviceTable) return;
+            serviceTable->applyFilters(filterSearch->text(),typeFilter->currentText(),stationFilter->currentText(),statusFilter->currentText());
+            emptyState->setVisible(serviceTable->visibleServiceCount()==0);
+            if(emptyState->isVisible()) serviceTable->hide(); else serviceTable->show();
+            updateMetricCards();
+        };
+        auto clearFilters=[this,applyFilters]() {
+            filterSearch->clear(); typeFilter->setCurrentIndex(0); stationFilter->setCurrentIndex(0); statusFilter->setCurrentIndex(0); applyFilters();
+        };
+        connect(filterSearch,&QLineEdit::textChanged,this,[this,applyFilters](const QString &value) { if(globalSearch->text()!=value) globalSearch->setText(value); applyFilters(); });
+        connect(globalSearch,&QLineEdit::textChanged,this,[this](const QString &value) { if(filterSearch->text()!=value) filterSearch->setText(value); });
+        connect(typeFilter,qOverload<int>(&QComboBox::currentIndexChanged),this,[applyFilters](int) { applyFilters(); });
+        connect(stationFilter,qOverload<int>(&QComboBox::currentIndexChanged),this,[applyFilters](int) { applyFilters(); });
+        connect(statusFilter,qOverload<int>(&QComboBox::currentIndexChanged),this,[applyFilters](int) { applyFilters(); });
+        connect(clear,&QPushButton::clicked,this,[clearFilters]() { clearFilters(); });
+        connect(emptyClear,&QPushButton::clicked,this,[clearFilters]() { clearFilters(); });
+        serviceTable->setChangeCallback([this,applyFilters]() { applyFilters(); });
+        applyFilters();
         connect(addButton,&QPushButton::clicked,this,[this]() { openAddService(); });
+        connect(deleteButton,&QPushButton::clicked,this,[this]() { openDeleteService(); });
+        connect(editButton,&QPushButton::clicked,this,[this]() { openEditService(); });
 
-        auto *details=card("health"); auto *healthBox=new QVBoxLayout(details); healthBox->setContentsMargins(12,10,12,10); healthBox->setSpacing(9);
+        auto *details=card("health"); introWidgets.append(details); auto *healthBox=new QVBoxLayout(details); healthBox->setContentsMargins(12,10,12,10); healthBox->setSpacing(9);
         auto *healthHead=new QHBoxLayout; healthHead->setSpacing(11); healthHead->addWidget(new Glyph("wrench",blue,44,true)); auto *healthCopy=new QVBoxLayout; healthCopy->setSpacing(1);
         healthCopy->addWidget(text("SRV-001  –  Routine Maintenance","sectionTitle")); healthCopy->addWidget(text("Standard maintenance visit for weather station ALP-03.","smallMuted")); healthHead->addLayout(healthCopy,1);
         healthHead->addWidget(pill("In Progress","blue")); healthHead->addWidget(text("Last updated 1 hour ago","smallMuted")); healthHead->addWidget(button("View Full Details","external")); healthBox->addLayout(healthHead);
         detailGrid=new QGridLayout; detailGrid->setSpacing(14); detailPanels={detailInfo(),checklist(),timeline(),stationInfo()}; healthBox->addLayout(detailGrid); body->addWidget(details); body->addStretch(); scroll->setWidget(content);
         adapt();
+        QTimer::singleShot(130,this,[this]() { animatePageContents(); });
     }
 protected:
     void resizeEvent(QResizeEvent *event) override { QWidget::resizeEvent(event); adapt(); }
 private:
+    void animateWidget(QWidget *widget,int delayMs) {
+        auto *effect=new QGraphicsOpacityEffect(widget);
+        effect->setOpacity(0.0);
+        widget->setGraphicsEffect(effect);
+        QTimer::singleShot(delayMs,this,[this,effect]() {
+            auto *animation=new QPropertyAnimation(effect,"opacity",this);
+            animation->setDuration(520);
+            animation->setStartValue(0.0);
+            animation->setEndValue(1.0);
+            animation->setEasingCurve(QEasingCurve::OutCubic);
+            animation->start(QAbstractAnimation::DeleteWhenStopped);
+        });
+    }
+    void animatePageContents() {
+        if(introStarted) return;
+        introStarted=true;
+        int delay=0;
+        for(QWidget *widget:introWidgets) { animateWidget(widget,delay); delay+=125; }
+        if(serviceTable) serviceTable->animateRows(delay+30,115);
+    }
+    void updateMetricCards() {
+        if(metricCounts.size()<4 || !serviceTable) return;
+        metricCounts[0]->setText(QString::number(serviceTable->serviceCount()));
+        metricCounts[1]->setText(QString::number(serviceTable->serviceCountWithStatus("Completed")));
+        metricCounts[2]->setText(QString::number(serviceTable->serviceCountWithStatus("In Progress")));
+        metricCounts[3]->setText(QString::number(serviceTable->serviceCountWithStatus("Overdue")));
+    }
     void openAddService() {
         QWidget *owner=window();
         auto *overlay=new QWidget(owner); overlay->setObjectName("modalDimmer"); overlay->setAttribute(Qt::WA_StyledBackground,true);
         overlay->setStyleSheet("background:rgba(8,26,58,145)"); overlay->setGeometry(owner->rect()); overlay->show(); overlay->raise();
         AddServiceDialog dialog(owner);
+        dialog.setWindowOpacity(0.0);
+        QTimer::singleShot(0,&dialog,[&dialog]() {
+            auto *fade=new QPropertyAnimation(&dialog,"windowOpacity",&dialog);
+            fade->setDuration(220); fade->setStartValue(0.0); fade->setEndValue(1.0);
+            fade->setEasingCurve(QEasingCurve::OutCubic); fade->start(QAbstractAnimation::DeleteWhenStopped);
+        });
         const QPoint center=owner->mapToGlobal(owner->rect().center()); dialog.move(center-QPoint(dialog.width()/2,dialog.height()/2)); dialog.raise();
         const int result=dialog.exec(); overlay->hide(); overlay->deleteLater();
         if(result==QDialog::Accepted && serviceTable) serviceTable->addService(dialog.service());
+    }
+    void openEditService() {
+        const int row=serviceTable?serviceTable->checkedRow():-1;
+        if(row<0) {
+            QMessageBox::information(this,"Select a service","Select a service using its checkbox, then choose Edit.");
+            return;
+        }
+        QWidget *owner=window();
+        auto *overlay=new QWidget(owner); overlay->setObjectName("modalDimmer"); overlay->setAttribute(Qt::WA_StyledBackground,true);
+        overlay->setStyleSheet("background:rgba(8,26,58,145)"); overlay->setGeometry(owner->rect()); overlay->show(); overlay->raise();
+        const ServiceRecord existing=serviceTable->serviceAt(row);
+        AddServiceDialog dialog(owner,&existing);
+        dialog.setWindowOpacity(0.0);
+        QTimer::singleShot(0,&dialog,[&dialog]() {
+            auto *fade=new QPropertyAnimation(&dialog,"windowOpacity",&dialog);
+            fade->setDuration(260); fade->setStartValue(0.0); fade->setEndValue(1.0);
+            fade->setEasingCurve(QEasingCurve::OutCubic); fade->start(QAbstractAnimation::DeleteWhenStopped);
+        });
+        const QPoint center=owner->mapToGlobal(owner->rect().center()); dialog.move(center-QPoint(dialog.width()/2,dialog.height()/2)); dialog.raise();
+        const int result=dialog.exec(); overlay->hide(); overlay->deleteLater();
+        if(result==QDialog::Accepted && serviceTable) {
+            if(dialog.deleteRequested()) serviceTable->removeService(row);
+            else serviceTable->updateService(row,dialog.service());
+        }
+    }
+    void openDeleteService() {
+        const int row=serviceTable?serviceTable->checkedRow():-1;
+        if(row<0) {
+            QMessageBox::information(this,"Select a service","Select a service using its checkbox, then choose Delete.");
+            return;
+        }
+        const ServiceRecord record=serviceTable->serviceAt(row);
+        if(confirmDeleteService(window(),record) && serviceTable) serviceTable->removeService(row);
     }
     void adapt() {
         if(!detailGrid) return;

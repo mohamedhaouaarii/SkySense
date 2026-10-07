@@ -8,7 +8,7 @@ SkySenseWindow::SkySenseWindow(QWidget *parent)
 {
     ui->setupUi(this);
     setWindowTitle("SkySense - Smart Weather Management | Services");
-    setMinimumSize(1100, 700);
+    setMinimumSize(980, 640);
     setWindowIcon(QIcon(":/assets/logo/skysense_logo.png"));
     setupServiceUi(ui->centralWidget);
 }

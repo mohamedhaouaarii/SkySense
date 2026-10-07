@@ -55,8 +55,32 @@ QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
 QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 
 QDialog#addServiceDialog { background: #ffffff; border: 1px solid #dce9f8; border-radius: 10px; }
-QDialog#addServiceDialog QLineEdit, QDialog#addServiceDialog QComboBox, QDialog#addServiceDialog QDateEdit, QDialog#addServiceDialog QTimeEdit { min-height: 34px; }
-QDialog#addServiceDialog QTextEdit { min-height: 56px; }
+QDialog#addServiceDialog { background: #f5f9ff; }
+QDialog#addServiceDialog QScrollArea, QDialog#addServiceDialog QScrollArea QWidget#qt_scrollarea_viewport { background: #f5f9ff; }
+QLabel#serviceFormPlus { background: #e3f0ff; color: #0785ff; border-radius: 33px; font-size: 42px; font-weight: 300; }
+QWidget#autoIdCard { background: #edf6ff; border: 1px solid #cfe3fb; border-radius: 13px; }
+QLineEdit#serviceAutoId { background: transparent; border: none; padding: 0; color: #0877f9; font-size: 23px; font-weight: 700; }
+QFrame#serviceFormDivider { background: #d7e2f1; border: none; }
+QFrame#serviceDetailsCard { background: #ffffff; border: 1px solid #dce9f8; border-radius: 14px; }
+QLabel[role="serviceCardTitle"] { font-size: 21px; font-weight: 700; color: #102e5e; }
+QDialog#addServiceDialog QLabel[role="dialogTitle"] { font-size: 30px; }
+QDialog#addServiceDialog QLabel[role="dialogSubtitle"] { font-size: 15px; }
+QDialog#addServiceDialog QLabel[role="fieldLabel"] { font-size: 14px; color: #17366f; }
+QDialog#addServiceDialog QLineEdit, QDialog#addServiceDialog QComboBox,
+QDialog#addServiceDialog QDateEdit, QDialog#addServiceDialog QTimeEdit { min-height: 46px; font-size: 14px; }
+QDialog#addServiceDialog QTextEdit { min-height: 68px; font-size: 14px; }
+QDialog#addServiceDialog QPushButton { min-height: 46px; }
+QPushButton#deleteServiceAction { color: #b93c4d; }
+QPushButton#deleteServiceAction:hover { background: #fff1f2; border-color: #f2b9c0; color: #a92d40; }
+QPushButton#deleteServiceAction:pressed { background: #ffe0e4; border-color: #e995a0; }
+QPushButton#deleteEditedService { min-width: 112px; min-height: 48px; color: #e23a50; background: #ffffff; border-color: #f0b6be; }
+QPushButton#deleteEditedService:hover { background: #fff1f2; border-color: #e9909b; }
+QPushButton#deleteEditedService:pressed { background: #ffe0e4; border-color: #dc7582; }
+QPushButton#editServiceAction { color: #0877f9; }
+QPushButton#editServiceAction:hover { background: #eaf4ff; border-color: #9bcaff; }
+QPushButton#editServiceAction:pressed { background: #d6eaff; }
+QDialog#addServiceDialog QLineEdit, QDialog#addServiceDialog QComboBox, QDialog#addServiceDialog QDateEdit, QDialog#addServiceDialog QTimeEdit { min-height: 46px; }
+QDialog#addServiceDialog QTextEdit { min-height: 68px; }
 QLabel[role="dialogTitle"] { font-size: 22px; font-weight: 700; color: #102e5e; }
 QLabel[role="dialogSubtitle"] { font-size: 13px; color: #5d77ad; }
 QLabel[role="formSectionTitle"] { font-size: 13px; font-weight: 700; color: #102e5e; }
@@ -79,7 +103,19 @@ QDialog#addServiceDialog QLineEdit[checklistInput="true"] { min-height: 22px; }
 QLineEdit[checklistInput="true"]:focus { border: none; }
 QPushButton#dialogClose { border: none; background: transparent; color: #5275a4; font-size: 25px; padding: 0; }
 QPushButton#dialogClose:hover { background: #eaf4ff; border-radius: 17px; }
-QPushButton#cancelService { min-width: 88px; min-height: 40px; color: #0877f9; }
-QPushButton#createService { min-width: 132px; min-height: 40px; }
+QPushButton#cancelService { min-width: 100px; min-height: 48px; color: #0877f9; }
+QPushButton#createService { min-width: 150px; min-height: 48px; }
+QDialog#deleteServiceDialog { background: transparent; }
+QWidget#deleteServiceSurface { background: #f5faff; border: 1px solid #e1edfa; border-radius: 12px; }
+QFrame#deleteServiceDetailsCard { background: #fbfdff; border: 1px solid #cfe3fb; border-radius: 8px; }
+QWidget#deleteServiceWarning { background: #fff4f5; border: 1px solid #ffbdc6; border-radius: 8px; }
+QLabel[role="deleteDialogTitle"] { font-size: 25px; font-weight: 700; color: #102e5e; }
+QLabel[role="deleteWarningTitle"] { color: #f04455; font-weight: 700; }
+QPushButton#confirmDeleteService { min-width: 150px; min-height: 46px; color: #ffffff; background: #ff4055; border: 1px solid #f7354c; font-weight: 600; }
+QPushButton#confirmDeleteService:hover { background: #ed3048; border-color: #df2940; }
+QPushButton#confirmDeleteService:pressed { background: #d92139; }
+QPushButton#cancelService { min-height: 46px; }
+QWidget#servicesEmptyState { background: #ffffff; border: 1px dashed #c6d8ef; border-radius: 10px; }
+QLabel[role="emptyStateTitle"] { font-size: 17px; font-weight: 700; color: #17366f; }
 QPushButton[role="removeChecklist"] { border: none; background: transparent; padding: 0; color: #5175a4; }
 QPushButton[role="removeChecklist"]:hover { color: #e34755; background: #fff0f2; }
