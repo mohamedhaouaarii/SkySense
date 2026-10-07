@@ -1,7 +1,0 @@
-<RCC>
- <qresource prefix="/">
-  <file>styles/services.qss</file>
-  <file>assets/backgrounds/services_alps.png</file>
-  <file>assets/logo/skysense_logo.png</file>
- </qresource>
-</RCC>
