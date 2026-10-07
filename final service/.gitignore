@@ -1,0 +1,13 @@
+build/
+build-*/
+.qtcreator/
+*.pro.user
+*.pro.user.*
+*.user
+Makefile*
+*.o
+*.obj
+moc_*
+ui_*.h
+qrc_*
+*.exe
