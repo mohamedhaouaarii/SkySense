@@ -7,6 +7,7 @@
 #include <QDialog>
 #include <QEvent>
 #include <QFile>
+#include <QFileDialog>
 #include <QFormLayout>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -20,6 +21,9 @@
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPageLayout>
+#include <QPageSize>
+#include <QPdfWriter>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -380,10 +384,12 @@ public:
         auto *editButton = button("Edit Station");
         auto *deleteButton = button("Delete Station");
         auto *mapButton = button(QString::fromUtf8("⌖  Map"));
+        auto *exportButton = button(QString::fromUtf8("⇩  Export PDF"), true);
         actions->addWidget(addButton);
         actions->addWidget(editButton);
         actions->addWidget(deleteButton);
         actions->addWidget(mapButton);
+        actions->addWidget(exportButton);
         body->addLayout(actions);
 
         auto *metrics = new QHBoxLayout;
@@ -459,6 +465,7 @@ public:
         QObject::connect(editButton, &QPushButton::clicked, this, [this] { editStation(); });
         QObject::connect(deleteButton, &QPushButton::clicked, this, [this] { deleteStation(); });
         QObject::connect(mapButton, &QPushButton::clicked, this, [this] { showMap(); });
+        QObject::connect(exportButton, &QPushButton::clicked, this, [this] { exportPdf(); });
         refreshTable();
     }
 
@@ -496,6 +503,164 @@ private:
     QComboBox *statusFilter = nullptr;
     QComboBox *typeFilter = nullptr;
     QComboBox *sortFilter = nullptr;
+
+    void exportPdf() {
+        const QString suggestedName = "stations-" + QDate::currentDate().toString("yyyyMMdd") + ".pdf";
+        QString fileName = QFileDialog::getSaveFileName(
+            this, "Export station report", suggestedName, "PDF files (*.pdf)");
+        if (fileName.isEmpty())
+            return;
+        if (!fileName.endsWith(".pdf", Qt::CaseInsensitive))
+            fileName += ".pdf";
+
+        QPdfWriter writer(fileName);
+        writer.setTitle("Weather Station Report");
+        writer.setPageSize(QPageSize(QPageSize::A4));
+        writer.setPageOrientation(QPageLayout::Landscape);
+        writer.setPageMargins(QMarginsF(12, 12, 12, 12), QPageLayout::Millimeter);
+        writer.setResolution(96);
+
+        QPainter painter(&writer);
+        if (!painter.isActive()) {
+            QMessageBox::warning(this, "PDF Export", "The PDF file could not be created.");
+            return;
+        }
+
+        const QRect page = writer.pageLayout().paintRectPixels(writer.resolution());
+        const int left = page.left();
+        const int width = page.width();
+        int y = page.top();
+
+        int onlineCount = 0;
+        int offlineCount = 0;
+        int totalAvailability = 0;
+        for (int stationIndex : visibleStationIndices) {
+            const Station &station = stations[stationIndex];
+            onlineCount += station.status == "Online";
+            offlineCount += station.status == "Offline";
+            totalAvailability += station.availability;
+        }
+        const int averageAvailability = visibleStationIndices.isEmpty()
+                                            ? 0
+                                            : qRound(double(totalAvailability) / visibleStationIndices.size());
+
+        const QStringList headers{"Station ID", "Station", "City / Region", "Equipment",
+                                  "Availability", "Status", "Last Update"};
+        const qreal columnRatios[]{0.10, 0.18, 0.18, 0.10, 0.13, 0.12, 0.19};
+        int columnWidths[7];
+        int usedWidth = 0;
+        for (int column = 0; column < 6; ++column) {
+            columnWidths[column] = qRound(width * columnRatios[column]);
+            usedWidth += columnWidths[column];
+        }
+        columnWidths[6] = width - usedWidth;
+
+        const auto drawTableHeader = [&](int top) {
+            const int headerHeight = 34;
+            painter.fillRect(QRect(left, top, width, headerHeight), QColor("#061b35"));
+            QFont headerFont("Segoe UI");
+            headerFont.setPointSizeF(8.5);
+            headerFont.setBold(true);
+            painter.setFont(headerFont);
+            painter.setPen(Qt::white);
+            int x = left;
+            for (int column = 0; column < 7; ++column) {
+                const QRect cell(x, top, columnWidths[column], headerHeight);
+                painter.drawText(cell.adjusted(6, 2, -6, -2),
+                                 Qt::AlignVCenter | Qt::AlignLeft | Qt::TextWordWrap,
+                                 headers[column]);
+                x += columnWidths[column];
+            }
+            return top + headerHeight;
+        };
+
+        QFont titleFont("Segoe UI");
+        titleFont.setPointSizeF(20);
+        titleFont.setBold(true);
+        painter.setFont(titleFont);
+        painter.setPen(QColor("#10152e"));
+        painter.drawText(QRect(left, y, width, 32), Qt::AlignVCenter | Qt::AlignLeft,
+                         "Weather Station Report");
+        y += 38;
+
+        QFont detailFont("Segoe UI");
+        detailFont.setPointSizeF(9.5);
+        painter.setFont(detailFont);
+        painter.setPen(QColor("#60749c"));
+        painter.drawText(QRect(left, y, width, 20), Qt::AlignVCenter | Qt::AlignLeft,
+                         "Generated " + QDate::currentDate().toString("MMMM d, yyyy"));
+        y += 27;
+
+        QFont summaryFont("Segoe UI");
+        summaryFont.setPointSizeF(10);
+        summaryFont.setBold(true);
+        painter.setFont(summaryFont);
+        painter.setPen(QColor("#26365e"));
+        const QString summary = QString("%1 stations shown   •   %2 online   •   %3 offline   •   %4% average availability")
+                                    .arg(visibleStationIndices.size())
+                                    .arg(onlineCount)
+                                    .arg(offlineCount)
+                                    .arg(averageAvailability);
+        painter.drawText(QRect(left, y, width, 22), Qt::AlignVCenter | Qt::AlignLeft, summary);
+        y += 30;
+        y = drawTableHeader(y);
+
+        const int rowHeight = 44;
+        QFont cellFont("Segoe UI");
+        cellFont.setPointSizeF(8.5);
+        painter.setFont(cellFont);
+        for (int row = 0; row < visibleStationIndices.size(); ++row) {
+            if (y + rowHeight > page.bottom() - 16) {
+                writer.newPage();
+                y = page.top();
+                QFont continuationFont("Segoe UI");
+                continuationFont.setPointSizeF(13);
+                continuationFont.setBold(true);
+                painter.setFont(continuationFont);
+                painter.setPen(QColor("#10152e"));
+                painter.drawText(QRect(left, y, width, 26), Qt::AlignVCenter | Qt::AlignLeft,
+                                 "Weather Station Report — continued");
+                y += 32;
+                painter.setFont(cellFont);
+                y = drawTableHeader(y);
+            }
+
+            const Station &station = stations[visibleStationIndices[row]];
+            const QString values[]{station.id, station.name + '\n' + station.type, station.cityRegion,
+                                   QString::number(station.equipment),
+                                   QString::number(station.availability) + "%", station.status,
+                                   station.lastUpdate};
+            const QRect rowRect(left, y, width, rowHeight);
+            painter.fillRect(rowRect, row % 2 == 0 ? QColor("#f5f8fd") : QColor(Qt::white));
+            painter.setPen(QColor("#e3ebf5"));
+            painter.drawRect(rowRect);
+
+            int x = left;
+            for (int column = 0; column < 7; ++column) {
+                const QRect cell(x, y, columnWidths[column], rowHeight);
+                const int alignment = column == 3
+                                          ? Qt::AlignCenter | Qt::TextWordWrap
+                                          : Qt::AlignVCenter | Qt::AlignLeft | Qt::TextWordWrap;
+                painter.setPen(column == 5
+                                   ? (station.status == "Maintenance" ? QColor("#d58b00")
+                                      : station.status == "Offline" ? QColor("#e34754")
+                                                                     : QColor("#00a866"))
+                                   : QColor("#14234b"));
+                painter.drawText(cell.adjusted(6, 2, -6, -2), alignment, values[column]);
+                x += columnWidths[column];
+            }
+            y += rowHeight;
+        }
+
+        if (visibleStationIndices.isEmpty()) {
+            painter.setPen(QColor("#60749c"));
+            painter.drawText(QRect(left, y + 12, width, 30), Qt::AlignVCenter | Qt::AlignLeft,
+                             "No stations match the current filters.");
+        }
+
+        painter.end();
+        QMessageBox::information(this, "PDF Export", "The report was saved to:\n" + fileName);
+    }
 
     static QString stationRegion(const Station &station) {
         return station.cityRegion.section('\n', -1).trimmed();
