@@ -1,5 +1,6 @@
 #include "equipmentui.h"
 #include "equipmentdata.h"
+#include "databaseconnection.h"
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QDesktopServices>
@@ -22,6 +23,7 @@
 #include <QBuffer>
 #include <QDialog>
 #include <QFile>
+#include <QFormLayout>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHeaderView>
@@ -113,6 +115,9 @@ void symbol(QPainter &p, const QString &name, QColor color)
     } else if (name == "replace") {
         p.drawLine(4,8,17,8); p.drawLine(14,4,18,8); p.drawLine(18,8,14,12);
         p.drawLine(20,16,7,16); p.drawLine(10,12,6,16); p.drawLine(6,16,10,20);
+    } else if (name == "database") {
+        for(int y : {4,10,16}) p.drawArc(QRectF(4,y-3,16,7),0,180*16);
+        p.drawLine(4,4,4,19); p.drawLine(20,4,20,19); p.drawArc(QRectF(4,16,16,7),180*16,180*16);
     }
 }
 QIcon icon(const QString &name, QColor color=blue)
@@ -137,6 +142,90 @@ QLineEdit *search(const QString &placeholder)
 {
     auto *edit=new QLineEdit; edit->setPlaceholderText(placeholder); edit->setMinimumWidth(160); edit->setFixedHeight(40);
     edit->addAction(icon("search",muted),QLineEdit::LeadingPosition); return edit;
+}
+
+void showOracleConnectionDialog(QWidget *parent)
+{
+    QDialog dialog(parent);
+    dialog.setObjectName("oracleConnectionDialog");
+    dialog.setWindowTitle("Oracle database connection");
+    dialog.setMinimumSize(570, 440);
+    dialog.setAttribute(Qt::WA_StyledBackground, true);
+    dialog.setStyleSheet(
+        "QDialog#oracleConnectionDialog{background:#f7fbff;color:#091b40;}"
+        "QFrame#oracleConnectionInfo{background:#ffffff;border:1px solid #d7e5f7;border-radius:12px;}"
+        "QLineEdit{background:#ffffff;border:1px solid #cfe0f6;border-radius:7px;padding:0 10px;min-height:34px;color:#17366f;}"
+        "QLineEdit:focus{border:2px solid #0785ff;}"
+        "QLabel#oracleConnectionStatus{padding:10px 12px;border-radius:8px;background:#edf4ff;color:#31598f;}"
+        "QPushButton#testOracleConnectionButton{background:#0785ff;color:#ffffff;border:none;border-radius:8px;padding:8px 16px;font-weight:600;}"
+        "QPushButton#testOracleConnectionButton:hover{background:#006fe0;}"
+    );
+    auto *layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(28, 25, 28, 24);
+    layout->setSpacing(12);
+    layout->addWidget(text("Oracle database connection", "dialogTitle"));
+    auto *intro = text("Enter your Oracle XE account parameters, then test the connection from this Equipment module.", "subtitle");
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+
+    auto *info = card("detail");
+    info->setObjectName("oracleConnectionInfo");
+    auto *infoLayout = new QHBoxLayout(info);
+    infoLayout->setContentsMargins(14, 12, 14, 12);
+    auto *infoIcon = new QLabel;
+    infoIcon->setPixmap(icon("database", blue).pixmap(34, 34));
+    infoLayout->addWidget(infoIcon);
+    auto *infoText = text("Detected setup: Oracle XE listener is expected at localhost:1521/XE. Your password is used only for this test and is not saved.", "smallMuted");
+    infoText->setWordWrap(true);
+    infoLayout->addWidget(infoText, 1);
+    layout->addWidget(info);
+
+    auto *form = new QFormLayout;
+    form->setHorizontalSpacing(14);
+    form->setVerticalSpacing(9);
+    auto makeInput = [] (const QString &value, const QString &placeholder = QString()) {
+        auto *input = new QLineEdit(value);
+        input->setPlaceholderText(placeholder);
+        return input;
+    };
+    auto *driver = makeInput("Oracle dans OraDB21Home1");
+    auto *host = makeInput("localhost");
+    auto *port = makeInput("1521");
+    auto *service = makeInput("XE");
+    auto *user = makeInput({}, "Enter your Oracle username");
+    auto *password = makeInput({}, "Enter your Oracle password");
+    password->setEchoMode(QLineEdit::Password);
+    driver->setObjectName("oracleDriverInput"); host->setObjectName("oracleHostInput"); port->setObjectName("oraclePortInput");
+    service->setObjectName("oracleServiceInput"); user->setObjectName("oracleUsernameInput"); password->setObjectName("oraclePasswordInput");
+    form->addRow("ODBC driver", driver);
+    form->addRow("Host", host);
+    form->addRow("Port", port);
+    form->addRow("Service / SID", service);
+    form->addRow("Username", user);
+    form->addRow("Password", password);
+    layout->addLayout(form);
+
+    auto *status = text("Enter your personal Oracle account, then choose Test Connection.", "smallMuted");
+    status->setObjectName("oracleConnectionStatus");
+    layout->addWidget(status);
+    auto *actions = new QHBoxLayout;
+    actions->addStretch();
+    auto *close = button("Close", "");
+    auto *test = button("Test Connection", "database", true);
+    test->setObjectName("testOracleConnectionButton");
+    actions->addWidget(close);
+    actions->addWidget(test);
+    layout->addLayout(actions);
+    QObject::connect(close, &QPushButton::clicked, &dialog, &QDialog::reject);
+    QObject::connect(test, &QPushButton::clicked, &dialog, [=] {
+        const OracleConnectionParameters parameters{driver->text(), host->text(), port->text(), service->text(), user->text(), password->text()};
+        const OracleConnectionResult result = DatabaseConnection::testOracleConnection(parameters);
+        status->setText(result.message);
+        status->setStyleSheet(result.connected
+            ? "padding:10px 12px;border-radius:8px;background:#dcfce7;color:#087f43;font-weight:600;"
+            : "padding:10px 12px;border-radius:8px;background:#fff1f2;color:#bc2440;font-weight:600;");
+    });
+    dialog.exec();
 }
 class Selector final : public QComboBox {
 protected:
@@ -1052,6 +1141,8 @@ public:
         auto *subtitle=text("Monitor weather equipment health, connectivity, calibration, and latest readings.","subtitle");
         subtitle->setWordWrap(true); pageHeader->addWidget(subtitle,1,0);
         auto *actions=new QHBoxLayout; actions->setSpacing(8);
+        auto *databaseButton=button("Oracle Connection","database"); databaseButton->setObjectName("oracleConnectionButton");
+        databaseButton->setToolTip("Enter your Oracle account parameters and test the database connection.");
         auto *exportButton=button("Export PDF","export"); exportButton->setObjectName("exportEquipmentButton");
         exportButton->setToolTip("Choose either the complete inventory or selected equipment when exporting a PDF.");
         auto *statisticsButton=button("Statistics","chart"); statisticsButton->setObjectName("equipmentStatisticsButton");
@@ -1062,7 +1153,7 @@ public:
         editButton=button("Edit","edit"); editButton->setObjectName("editSelectedEquipmentButton");
         deleteButton=button("Delete","delete"); deleteButton->setObjectName("deleteSelectedEquipmentButton");
         auto *addButton=button("Add Equipment","plus",true); addButton->setObjectName("addEquipmentButton");
-        actions->addWidget(exportButton); actions->addWidget(statisticsButton); actions->addWidget(replacementButton); actions->addWidget(editButton); actions->addWidget(deleteButton); actions->addWidget(addButton);
+        actions->addWidget(databaseButton); actions->addWidget(exportButton); actions->addWidget(statisticsButton); actions->addWidget(replacementButton); actions->addWidget(editButton); actions->addWidget(deleteButton); actions->addWidget(addButton);
         pageHeader->addLayout(actions,0,1,2,1,Qt::AlignRight|Qt::AlignVCenter); pageHeader->setColumnStretch(0,1);
         body->addLayout(pageHeader);
         auto *cards=new QHBoxLayout; cards->setSpacing(10);
@@ -1103,6 +1194,7 @@ public:
         for(auto *filter:{typeFilter,stationFilter,statusFilter})
             QObject::connect(filter,&QComboBox::currentIndexChanged,this,[this]{applyFilters();});
         QObject::connect(clear,&QPushButton::clicked,this,[this]{query->clear();typeFilter->setCurrentIndex(0);stationFilter->setCurrentIndex(0);statusFilter->setCurrentIndex(0);applyFilters();});
+        QObject::connect(databaseButton,&QPushButton::clicked,this,[this]{showOracleConnectionDialog(this);});
         QObject::connect(addButton,&QPushButton::clicked,this,[this]{
             EquipmentRecord record;
             showAddEquipmentDialog(this,&record,false,[this](const EquipmentRecord &added){
