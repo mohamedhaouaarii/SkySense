@@ -175,7 +175,7 @@ void showOracleConnectionDialog(QWidget *parent)
     auto *infoIcon = new QLabel;
     infoIcon->setPixmap(icon("database", blue).pixmap(34, 34));
     infoLayout->addWidget(infoIcon);
-    auto *infoText = text("Detected setup: Oracle XE listener is expected at localhost:1521/XE. Your password is used only for this test and is not saved.", "smallMuted");
+    auto *infoText = text("Detected setup: Oracle XE application users normally connect at localhost:1521/XEPDB1. Your password is used only for this test and is not saved.", "smallMuted");
     infoText->setWordWrap(true);
     infoLayout->addWidget(infoText, 1);
     layout->addWidget(info);
@@ -191,7 +191,7 @@ void showOracleConnectionDialog(QWidget *parent)
     auto *driver = makeInput("Oracle dans OraDB21Home1");
     auto *host = makeInput("localhost");
     auto *port = makeInput("1521");
-    auto *service = makeInput("XE");
+    auto *service = makeInput("XEPDB1");
     auto *user = makeInput({}, "Enter your Oracle username");
     auto *password = makeInput({}, "Enter your Oracle password");
     password->setEchoMode(QLineEdit::Password);
