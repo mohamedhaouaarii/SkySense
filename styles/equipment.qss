@@ -15,6 +15,17 @@ QLabel[role="trend"][tone="red"] { color: #ff304a; }
 QLabel[role="trend"][tone="purple"] { color: #efa000; }
 QFrame[role="topbar"] { background: #fcfdff; border: none; border-bottom: 1px solid #e0ebf8; }
 QFrame[role="divider"] { background: #d7e2f1; }
+QDateEdit#reportDatePicker { background: #ffffff; border: 1px solid #d7e5f7; border-radius: 8px; padding: 0 8px 0 10px; color: #17366f; font-weight: 600; min-width: 168px; }
+QDateEdit#reportDatePicker:hover, QDateEdit#reportDatePicker:focus { border-color: #0785ff; background: #fafdff; }
+QDateEdit#reportDatePicker::drop-down { width: 28px; border: none; }
+QDateEdit#reportDatePicker::down-arrow { image: none; }
+QCalendarWidget QWidget#qt_calendar_navigationbar { background: #f5f9ff; }
+QCalendarWidget QToolButton { color: #17366f; font-weight: 700; background: transparent; border: none; }
+QCalendarWidget QAbstractItemView:enabled { selection-background-color: #0785ff; selection-color: white; color: #17366f; }
+QComboBox#reportCalendarMonth { font-size: 14px; font-weight: 600; background: #f5f9ff; }
+QSpinBox#reportCalendarYear { background: #f5f9ff; border: 1px solid #d7e5f7; border-radius: 7px; padding: 0 5px; font-size: 14px; font-weight: 600; }
+QSpinBox#reportCalendarYear:focus { border-color: #0785ff; }
+QToolButton#reportDateArrow { padding: 0; }
 QFrame[role="card"], QFrame[role="metric"] { background: #ffffff; border: 1px solid #e0ebf8; border-radius: 12px; }
 QFrame[role="detail"] { background: #ffffff; border: 1px solid #e4edf9; border-radius: 7px; }
 QFrame[role="metric"][tone="blue"] { background: #f2faff; }
@@ -25,6 +36,11 @@ QPushButton, QToolButton { background: #ffffff; border: 1px solid #d6e5f7; borde
 QPushButton:hover, QToolButton:hover { background: #eef6ff; border-color: #9bcaff; }
 QPushButton:pressed, QToolButton:pressed { background: #dceeff; }
 QPushButton:focus, QToolButton:focus { border-color: #0785ff; }
+QToolButton#editEquipmentButton, QToolButton#deleteEquipmentButton { background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 0; }
+QToolButton#editEquipmentButton:hover { background: #eef6ff; border-color: #c9e2ff; }
+QToolButton#deleteEquipmentButton:hover { background: #fff0f0; border-color: #ffd2d2; }
+QToolButton#editEquipmentButton:pressed { background: #dceeff; }
+QToolButton#deleteEquipmentButton:pressed { background: #ffe0e0; }
 QPushButton[primary="true"] { color: #ffffff; background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #058aff,stop:1 #0065f2); border-color: #087aff; }
 QPushButton[primary="true"]:hover { background: #168fff; }
 QPushButton[primary="true"]:pressed { background: #005bc6; }
@@ -71,4 +87,11 @@ QDialog#addEquipmentDialog QLineEdit:focus, QDialog#addEquipmentDialog QComboBox
 QPushButton#dialogCancelButton { background: #ffffff; border: 1px solid #d0ddef; border-radius: 8px; padding: 0 22px; color: #334b70; font-weight: 600; }
 QPushButton#dialogCancelButton:hover { background: #f1f6fc; border-color: #adc4e1; }
 QPushButton#dialogSaveButton { border-radius: 8px; padding: 0 20px; font-weight: 600; }
+QMessageBox#deleteEquipmentConfirmation { background: #ffffff; }
+QMessageBox#deleteEquipmentConfirmation QLabel { color: #173052; background: transparent; padding: 3px; }
+QPushButton#confirmDeleteEquipmentButton { color: #ffffff; background: #e5484d; border: 1px solid #d9363e; border-radius: 8px; padding: 0 16px; font-weight: 600; }
+QPushButton#confirmDeleteEquipmentButton:hover { background: #d9363e; }
+QPushButton#confirmDeleteEquipmentButton:pressed { background: #b92d34; }
+QPushButton#cancelDeleteEquipmentButton { color: #334b70; background: #f6f9fe; border: 1px solid #d0ddef; border-radius: 8px; padding: 0 16px; font-weight: 600; }
+QPushButton#cancelDeleteEquipmentButton:hover { background: #edf4fc; border-color: #adc4e1; }
 
