@@ -1,5 +1,6 @@
 #include "staffui.h"
 #include "staffdata.h"
+#include "stafftraining.h"
 #include <QtWidgets>
 #include <algorithm>
 #include <limits>
@@ -213,7 +214,7 @@ class StaffCanvas final : public QWidget {
     QTableWidget *table{};
     StaffHeader *header{};
     QLabel *pagination{},*name{},*role{},*description{},*status{},*email{},*phone{},*joined{};
-    QPushButton *previous{},*next{},*editStaffButton{},*addStaffButton{},*deleteStaffButton{},*accessButton{},*smallEditButton{};
+    QPushButton *previous{},*next{},*editStaffButton{},*addStaffButton{},*deleteStaffButton{},*accessButton{},*smallEditButton{},*trainingButton{};
     QLabel *emptyList{};
     QList<QPushButton*> tabs;
     QList<QLabel*> infoValues;
@@ -327,11 +328,14 @@ private:
         });
     }
     void buildDetails() {
-        name=text(this,"Daniel Kim",QRect(335,670,450,30),21,ink,true);name->setObjectName("staffDetailName");
+        name=text(this,"Daniel Kim",QRect(335,670,360,30),21,ink,true);name->setObjectName("staffDetailName");
         status=text(this,"Active",QRect(515,674,83,24),12,QColor("#009347"));status->setObjectName("staffDetailStatus"); status->setAlignment(Qt::AlignCenter);
-        role=text(this,"Technical Specialist",QRect(335,697,520,20),13);
+        role=text(this,"Technical Specialist",QRect(335,697,450,20),13);
         description=text(this,"Supports station operations, sensor calibration, and system troubleshooting.",QRect(335,716,640,20),12,muted);
         editStaffButton=button(this,"Edit Staff","edit",QRect(990,679,114,35),true); editStaffButton->setObjectName("editStaff"); connect(editStaffButton,&QPushButton::clicked,this,[this]{editMember(false);});
+        trainingButton=button(this,"Skills && Training","clipboard",QRect(805,679,175,35));trainingButton->setObjectName("staffTraining");
+        trainingButton->setToolTip("Assess skills and identify training needs for the selected member");
+        connect(trainingButton,&QPushButton::clicked,this,[this]{showTraining();});
         new Glyph(this,"mail",QRect(1131,687,23,23),QColor("#254a90")); email=text(this,"",QRect(1165,681,162,35),12,muted);
         new Glyph(this,"phone",QRect(1354,686,23,23));phone=text(this,"",QRect(1386,681,125,35),12,muted);
         new Glyph(this,"calendar",QRect(1518,685,26,26),QColor("#254a90")); text(this,"Joined Date",QRect(1557,680,91,19),12,muted);joined=text(this,"",QRect(1557,700,91,19),12,ink,true);
@@ -382,7 +386,7 @@ private:
     }
     void updateDetails() {
         auto *m=selected();
-        editStaffButton->setEnabled(writable && m);deleteStaffButton->setEnabled(writable && m);smallEditButton->setEnabled(writable && m);accessButton->setEnabled(writable && m);status->setVisible(m!=nullptr);for(auto *b:tabs)b->setEnabled(m!=nullptr);
+        editStaffButton->setEnabled(writable && m);deleteStaffButton->setEnabled(writable && m);smallEditButton->setEnabled(writable && m);accessButton->setEnabled(writable && m);trainingButton->setEnabled(writable && m);status->setVisible(m!=nullptr);for(auto *b:tabs)b->setEnabled(m!=nullptr);
         for(auto *box:access)box->setEnabled(writable && m);
         if(!m){name->setText("No matching staff");name->setToolTip({});role->clear();description->clear();status->clear();email->clear();email->setToolTip({});phone->clear();phone->setToolTip({});joined->clear();for(auto *label:infoValues)label->clear();overview->hide();tabContent->hide();return;}
         setFittedText(name,m->name);const int badgeX=name->x()+QFontMetrics(name->font()).horizontalAdvance(name->text())+16;status->move(badgeX,674);
@@ -478,9 +482,15 @@ private:
         for(int i=0;i<members.size();++i)if(members[i].id==member.id){members[i].status=nextStatus;break;}
         persist(before,member.id,member.name,"Status changed",member.status+" → "+nextStatus);
     }
+    void showTraining() {
+        if(!writable || !selected())return;
+        const Member member=*selected();const State before=data;QString details;
+        if(editTraining(data,member.id,details,this))
+            persist(before,member.id,member.name,"Training assessment updated",details);
+    }
     void showActions() {
-        auto *m=selected();if(!m || !writable)return;QMenu menu(this);menu.setObjectName("staffActions");auto *edit=menu.addAction("Edit Staff");auto *toggle=menu.addAction(m->status=="Active"?"Deactivate account":"Activate account");auto *permissionsAction=menu.addAction("Edit Access");menu.addSeparator();auto *remove=menu.addAction("Delete Staff");auto *choice=menu.exec(QCursor::pos());
-        if(choice==edit)editMember(false);else if(choice==toggle)toggleMember();else if(choice==permissionsAction)editPermissions();else if(choice==remove)deleteMember();
+        auto *m=selected();if(!m || !writable)return;QMenu menu(this);menu.setObjectName("staffActions");auto *edit=menu.addAction("Edit Staff");auto *toggle=menu.addAction(m->status=="Active"?"Deactivate account":"Activate account");auto *permissionsAction=menu.addAction("Edit Access");auto *trainingAction=menu.addAction("Skills & Training");menu.addSeparator();auto *remove=menu.addAction("Delete Staff");auto *choice=menu.exec(QCursor::pos());
+        if(choice==edit)editMember(false);else if(choice==toggle)toggleMember();else if(choice==permissionsAction)editPermissions();else if(choice==trainingAction)showTraining();else if(choice==remove)deleteMember();
     }
     void showStatistics() {
         QDialog dialog(this);dialog.setObjectName("statisticsDialog");dialog.setWindowTitle("Staff Statistics");dialog.resize(740,510);

@@ -1,5 +1,5 @@
-Vérification du 5 octobre 2026 — version corrigée
-Validation du code avant publication sur la branche gestion-staff.
+Vérification du 14 octobre 2026 — évolution Skills & Training
+Validation du code avant publication sur gestion-staff.
 
 ENVIRONNEMENT
 C++, Qt Widgets / Qt Test 6.7.3, qmake, MinGW 11.2 64-bit, Windows 11.
@@ -10,8 +10,8 @@ Aucun portrait ni point décoratif macOS.
 RÉSULTATS
 Compilation de l'application et des tests : réussie.
 Exécution de l'application et capture Qt : code de sortie 0.
-18 résultats Qt Test réussis, 0 échec, 0 ignoré
-(16 scénarios + initialisation/nettoyage).
+25 résultats Qt Test réussis, 0 échec, 0 ignoré
+(23 scénarios + initialisation/nettoyage).
 Chaque scénario utilise un dossier de données temporaire distinct.
 
 SCÉNARIOS
@@ -34,14 +34,32 @@ SCÉNARIOS
   les données de l'autre instance et avec retour de l'interface à son état précédent ;
 - refus des doublons, d'un fichier corrompu et d'une écriture concurrente verrouillée.
 
+NOUVEAUX SCÉNARIOS FORMATION
+- distinction non évalué / non acquis, calcul et classement des écarts,
+  exigences satisfaites et fonction sans référentiel ;
+- saisie dans la vraie fenêtre, recalcul immédiat, sauvegarde, réouverture et audit ;
+- annulation conjointe des évaluations et modifications du référentiel ;
+- création d'exigences pour une nouvelle fonction, validation des doublons,
+  partage du référentiel entre membres et persistance ;
+- changement de fonction : recalcul sans perte des compétences acquises ;
+- lecture du schéma 1 sans écriture à l'ouverture, migration au schéma 2,
+  conservation des données et refus des niveaux invalides ;
+- conflit d'écriture : annulation de l'évaluation locale et préservation du fichier.
+
+CONTRÔLE VISUEL
+Captures de la vraie interface et de Skills & Training contrôlées.
+La fenêtre de formation défile à petite taille ; les boutons restent accessibles.
+Le nouveau bouton ne chevauche pas les noms longs ni le badge de statut.
+Les captures/tests utilisent des données temporaires, sans modifier les données réelles.
+
 LIVRAISON
 Sources, ressources, tests et documentation dans le ZIP.
 Aucune donnée utilisateur, build, cache IDE, .git ou bibliothèque copiée.
 Modifications limitées au dossier Staff.
-Base de cette correction : 5ebe082 (version antérieure).
-Branche de livraison : gestion-staff.
+Base publiée : fc3753f.
+Branche de livraison : gestion-staff ; dossier du module : staff/.
 
 PÉRIMÈTRE
 Stockage JSON local. Le journal utilise l'opérateur Windows.
 Pas de Login ni de serveur ajouté ; les autres modules ne sont pas modifiés.
-EXIGENCES_STAFF.md décrit les cinq fonctions et la limite d'intégration des droits.
+EXIGENCES_STAFF.md et FORMATION_STAFF.md décrivent les fonctions, règles et limites.

@@ -1,4 +1,5 @@
 #include "staffdata.h"
+#include "stafftraining.h"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -62,12 +63,38 @@ QString validateMember(const State &state, const Member &member, const QString &
 }
 
 namespace {
+bool decodeLevels(const QJsonValue &value, SkillLevels &levels, int minimum, QString &error) {
+    if (!value.isObject() || value.toObject().size()>100) {
+        error="Invalid training skills or role requirements."; return false;
+    }
+    QSet<QString> keys;
+    const auto object=value.toObject();
+    for (auto it=object.begin();it!=object.end();++it) {
+        const QString key=trainingKey(it.key());
+        const int level=it.value().toInt(-1);
+        if (key.isEmpty() || it.key().size()>80 || keys.contains(key)
+            || !it.value().isDouble() || it.value().toDouble()!=level || level<minimum || level>3) {
+            error="Training skills must be unique, with valid proficiency levels."; return false;
+        }
+        keys.insert(key);
+        levels.insert(it.key(),level);
+    }
+    return true;
+}
+
+QJsonObject encodeLevels(const SkillLevels &levels) {
+    QJsonObject object;
+    for (auto it=levels.cbegin();it!=levels.cend();++it) object.insert(it.key(),it.value());
+    return object;
+}
+
 bool decode(const QByteArray &bytes, State &state, QString &error) {
     QJsonParseError parseError;
     const auto document = QJsonDocument::fromJson(bytes, &parseError);
     const auto object = document.object();
+    const int schema=object.value("schema").toInt();
     if (parseError.error != QJsonParseError::NoError || !document.isObject()
-        || object.value("schema").toInt() != 1 || !object.value("members").isArray()
+        || (schema!=1 && schema!=2) || !object.value("members").isArray()
         || !object.value("permissions").isObject() || !object.value("audit").isArray()) {
         error = "The Staff data file is invalid or uses an unsupported format. It has not been changed.";
         return false;
@@ -83,11 +110,32 @@ bool decode(const QByteArray &bytes, State &state, QString &error) {
                       row.value("role").toString(), row.value("department").toString(), row.value("status").toString(),
                       row.value("login").toString(), row.value("phone").toString(), row.value("joined").toString(),
                       row.value("note").toString()};
+        if (schema==2 && !decodeLevels(row.value("skills"),member.skills,0,error)) return false;
         if (member.id.isEmpty() || ids.contains(member.id) || !validateMember(loaded, member).isEmpty()) {
             error = "Invalid or duplicate Staff record. The data file has not been changed."; return false;
         }
         ids.insert(member.id);
         loaded.members.append(member);
+    }
+    // Schema 1 files keep all existing records and receive editable starter templates.
+    // Their members remain unassessed. Upgrade is written only on the next successful save.
+    if (schema==2) {
+        if (!object.value("roleRequirements").isObject()) {
+            error="Missing training role requirements."; return false;
+        }
+        loaded.roleRequirements.clear();
+        const auto roles=object.value("roleRequirements").toObject();
+        QSet<QString> keys;
+        for (auto it=roles.begin();it!=roles.end();++it) {
+            const QString key=trainingKey(it.key());
+            SkillLevels requirements;
+            if (key.isEmpty() || it.key().size()>80 || keys.contains(key)) {
+                error="Invalid or duplicate role in training requirements."; return false;
+            }
+            if (!decodeLevels(it.value(),requirements,1,error)) return false;
+            keys.insert(key);
+            loaded.roleRequirements.insert(it.key(),requirements);
+        }
     }
     const auto grants = object.value("permissions").toObject();
     for (auto it = grants.begin(); it != grants.end(); ++it) {
@@ -122,7 +170,8 @@ QByteArray encode(const State &state, int revision) {
     for (const auto &m : state.members)
         members.append(QJsonObject{{"id",m.id},{"name",m.name},{"email",m.email},{"role",m.role},
                                   {"department",m.department},{"status",m.status},{"login",m.login},
-                                  {"phone",m.phone},{"joined",m.joined},{"note",m.note}});
+                                  {"phone",m.phone},{"joined",m.joined},{"note",m.note},
+                                  {"skills",encodeLevels(m.skills)}});
     for (auto it = state.permissions.begin(); it != state.permissions.end(); ++it) {
         QJsonArray rights;
         for (bool right : it.value()) rights.append(right);
@@ -131,8 +180,12 @@ QByteArray encode(const State &state, int revision) {
     for (const auto &e : state.audit)
         audit.append(QJsonObject{{"timestamp",e.timestamp},{"actor",e.actor},{"memberId",e.memberId},
                                  {"memberName",e.memberName},{"action",e.action},{"details",e.details}});
-    return QJsonDocument(QJsonObject{{"schema",1},{"revision",revision},{"nextId",state.nextId},
-                                    {"members",members},{"permissions",permissions},{"audit",audit}}).toJson();
+    QJsonObject requirements;
+    for (auto it=state.roleRequirements.cbegin();it!=state.roleRequirements.cend();++it)
+        requirements.insert(it.key(),encodeLevels(it.value()));
+    return QJsonDocument(QJsonObject{{"schema",2},{"revision",revision},{"nextId",state.nextId},
+                                    {"members",members},{"permissions",permissions},{"audit",audit},
+                                    {"roleRequirements",requirements}}).toJson();
 }
 }
 

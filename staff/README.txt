@@ -1,10 +1,10 @@
 SkySense — Gestion Staff | Qt 6.7.3
-Version corrigée du 5 octobre 2026 — branche gestion-staff.
+Évolution du 14 octobre 2026 — Skills & Training, branche gestion-staff.
 
 OUVRIR ET LANCER
 1. Extraire entièrement le ZIP.
-2. Ouvrir SkySense_Staff_Matched/SkySense.pro dans Qt Creator.
-   Dans la copie du dépôt, le projet est staff/SkySense.pro.
+2. Ouvrir staff/SkySense.pro dans Qt Creator.
+   Le dossier du module s'appelle staff, dans le ZIP comme dans le dépôt.
 3. Choisir Desktop Qt 6.7.3 MinGW 64-bit.
 4. Exécuter qmake, puis Rebuild Project et Run.
 Le projet Equipment à la racine du dépôt reste indépendant et inchangé.
@@ -23,7 +23,7 @@ CRUD STAFF
   Les habilitations du membre sont retirées ; son historique est conservé.
 - L'identifiant est généré automatiquement et n'est pas réutilisé après suppression.
 
-CINQ FONCTIONNALITÉS AVANCÉES
+FONCTIONS EXISTANTES CONSERVÉES
 1. Recherche et tri : recherche par ID, nom, email, rôle ou département ;
    filtres rôle/statut ; clic sur les en-têtes ID à Last Login pour alterner
    croissant/décroissant. Le tri porte sur tous les résultats, avant pagination.
@@ -36,6 +36,21 @@ CINQ FONCTIONNALITÉS AVANCÉES
 5. Activity Log : actions réellement réalisées, avec date, opérateur local,
    membre et détail. Recherche possible ; l'historique conserve les membres supprimés.
 
+NOUVEAU MÉTIER INNOVANT — BESOINS EN FORMATION
+Sélectionner un membre, puis cliquer sur Skills & Training, à côté de Edit Staff.
+1. Vérifier les compétences requises pour sa fonction dans Edit role requirements.
+   Les huit fonctions initiales disposent de modèles modifiables par le responsable.
+   Une nouvelle fonction commence sans exigences : le responsable les définit.
+2. Évaluer chaque compétence : 0 non acquise, 1 bases, 2 autonomie, 3 avancé.
+   Not assessed signifie « pas encore évaluée », pas « compétence absente ».
+3. Les écarts confirmés produisent des suggestions de domaines de formation :
+   priorité haute pour un écart de 2 ou 3 niveaux, normale pour un écart de 1.
+4. Save assessment conserve les évaluations et le référentiel modifié.
+   Cancel abandonne les deux. Les modifications sont inscrites dans Activity Log.
+Les exigences d'une fonction sont communes à tous ses membres. Un changement
+de fonction conserve les compétences acquises et recalcule les besoins.
+FORMATION_STAFF.md contient les règles et un scénario de démonstration.
+
 SAUVEGARDE LOCALE
 Les membres, habilitations, identifiants et événements sont enregistrés en JSON
 dans le dossier AppLocalDataLocation de Qt, normalement :
@@ -47,6 +62,10 @@ Les écritures sont atomiques ; un verrou et un numéro de révision évitent
 l'écrasement des changements d'une autre instance. En cas d'erreur, la
 modification est annulée dans l'interface et un message explique le problème.
 Un fichier invalide n'est jamais remplacé automatiquement.
+La nouvelle version lit les anciens fichiers JSON (schéma 1), sans inventer de
+compétences, puis écrit le schéma 2 à la prochaine sauvegarde réussie.
+Un fichier au schéma 2 nécessite cette version de l'application ; garder une
+copie de staff.json avant de revenir à une ancienne version.
 Pour sauvegarder vos données, fermer l'application puis copier staff.json.
 
 PÉRIMÈTRE
@@ -61,8 +80,11 @@ La navigation vers les autres modules reste hors de cette livraison.
 FICHIERS
 staffui.cpp/.h : interface et interactions.
 staffdata.cpp/.h : entité, statistiques, calcul des droits, validation et stockage.
+stafftraining.cpp/.h : référentiels de fonction et comparaison des compétences.
+stafftrainingdialog.cpp : évaluation et édition des exigences de formation.
 styles/staff.qss : style ; assets/ : ressources.
-EXIGENCES_STAFF.md : acteurs, CRUD, cinq fonctions et démonstration.
+EXIGENCES_STAFF.md : acteurs, CRUD, fonctions conservées et métier de formation.
+FORMATION_STAFF.md : nouveau métier innovant et mode d'emploi.
 VERIFICATION.txt : résultats de compilation et de tests.
 
 TESTS
@@ -77,7 +99,7 @@ SkySense_Staff_Matched.exe --screenshot apercu.png
 Ce mode utilise des données temporaires et ne modifie pas votre fichier staff.json.
 
 GESTION DES VERSIONS
-Branche individuelle : gestion-staff.
-Les corrections Staff prolongent le commit 5ebe082.
+Branche individuelle : gestion-staff ; base de l'évolution : fc3753f.
+L'évolution Skills & Training est regroupée dans un commit consacré à Staff.
 Les commits de ce module restent limités au dossier staff/ ; les données locales,
 builds et caches IDE sont exclus du suivi Git.

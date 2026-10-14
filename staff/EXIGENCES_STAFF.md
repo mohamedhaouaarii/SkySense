@@ -1,8 +1,10 @@
-# Gestion Staff — version corrigée du 5 octobre 2026
+# Gestion Staff — évolution du 14 octobre 2026
 
 **Étudiante : Donia. Entité principale : Staff / membre du personnel.**
 Cette livraison conserve C++, Qt Widgets 6.7.3, qmake et MinGW 64-bit.
 Le module est développé sur la branche individuelle `gestion-staff`.
+Cette évolution ajoute le métier innovant de détection des besoins en formation
+dans le dossier `staff/`.
 
 ## Utilisateurs de l'application
 
@@ -20,7 +22,8 @@ identifier les actions, sans prétendre authentifier cet opérateur.
 ## Une entité, un CRUD complet
 
 L'entité Member comprend : identifiant, nom, email, téléphone, rôle,
-département, statut, date d'arrivée, dernière connexion d'exemple et note.
+département, statut, date d'arrivée, dernière connexion d'exemple, note et
+compétences évaluées avec leur niveau de maîtrise.
 
 | Opération | Réalisation |
 | --- | --- |
@@ -32,7 +35,11 @@ département, statut, date d'arrivée, dernière connexion d'exemple et note.
 Les changements sont sauvegardés localement en JSON et relus au lancement.
 L'historique reste consultable après suppression d'une fiche.
 
-## Cinq fonctionnalités avancées distinctes
+## Fonctions existantes conservées
+
+Le tri, la recherche, le PDF et les statistiques sont les métiers basiques de
+la grille pédagogique actuelle. La synthèse d'effectifs ne compte pas comme
+un deuxième métier innovant. Les fonctions ci-dessous restent disponibles :
 
 | Fonction | Comportement livré | Pourquoi elle est distincte |
 | --- | --- | --- |
@@ -42,8 +49,30 @@ L'historique reste consultable après suppression d'une fiche.
 | 4. Gestion des habilitations | Profils prédéfinis, droits personnalisés et sauvegarde par membre ; calcul des droits effectifs selon le statut. | Gérer des autorisations par module, au-delà du simple intitulé de rôle. |
 | 5. Journal d'audit local | Enregistrement automatique des créations, modifications, suppressions, changements de statut et de droits ; recherche par membre, opérateur, action ou détail. | Assurer la traçabilité des opérations, y compris sur des membres supprimés. |
 
-L'activation/désactivation appartient au CRUD et n'est pas comptée une
-seconde fois parmi les cinq fonctions avancées.
+L'activation/désactivation appartient au CRUD.
+
+## Nouveau métier innovant I2 — besoins en formation
+
+**Identifier les besoins en formation d'un membre en comparant ses compétences
+aux compétences requises pour sa fonction, puis proposer les domaines de
+formation prioritaires au responsable du personnel.**
+
+- Le responsable renseigne des niveaux de maîtrise entre 0 et 3 ; l'absence
+  d'évaluation reste « Not assessed » et ne devient jamais un niveau 0 implicite.
+- Chaque fonction possède un référentiel modifiable : compétence et niveau
+  minimum attendu entre 1 et 3. Huit modèles initiaux sont fournis comme exemples.
+- La comparaison affiche les exigences satisfaites et les écarts confirmés.
+- Les suggestions sont classées par écart décroissant ; un écart de 2 ou 3
+  niveaux est prioritaire, un écart de 1 niveau est normal.
+- Le responsable garde la décision finale ; aucune formation n'est réservée.
+- Les évaluations et référentiels sont persistants et leurs modifications sont
+  journalisées. Une annulation ou un conflit d'écriture ne sauvegarde rien.
+- La fonction d'un membre peut changer sans effacer ses compétences. Le rapport
+  est recalculé selon sa fonction actuelle ; les compétences supplémentaires sont conservées.
+
+L'évolution demandée porte sur ce nouveau métier I2. Le métier de disponibilité
+par période mentionné dans la grille pédagogique constitue un développement distinct.
+Les statuts Active/Inactive ne représentent pas une disponibilité à une date.
 
 ## Règles et limites explicites
 
@@ -77,8 +106,9 @@ seconde fois parmi les cinq fonctions avancées.
 
 ## Gestion des versions — travail individuel
 
-Branche individuelle : `gestion-staff`. Les corrections prolongent le commit
-`5ebe082` et sont regroupées dans un commit consacré au module Staff.
+Branche individuelle : `gestion-staff`. Base de l'évolution : `fc3753f`.
+Les modifications Skills & Training du 14 octobre 2026 sont regroupées dans
+un commit consacré au module Staff.
 
 Les changements sont limités au dossier staff/. Le ZIP contient les sources,
 ressources et tests, sans .git, données personnelles, exécutables, build ni cache IDE.

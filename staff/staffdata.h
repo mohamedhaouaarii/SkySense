@@ -8,9 +8,15 @@
 #include <QString>
 
 namespace Staff {
+using SkillLevels = QMap<QString, int>;
+using RoleRequirements = QMap<QString, SkillLevels>;
+RoleRequirements defaultRoleRequirements();
+
 struct Member {
     QString id, name, email, role, department, status, login, phone, joined;
     QString note{};
+    // Missing key = not assessed; 0 = not acquired; 1..3 = assessed proficiency.
+    SkillLevels skills{};
 };
 
 struct AuditEntry {
@@ -23,6 +29,7 @@ struct State {
     QList<AuditEntry> audit;
     int nextId = 13;
     int revision = 0;
+    RoleRequirements roleRequirements = defaultRoleRequirements();
 };
 
 struct Statistics {

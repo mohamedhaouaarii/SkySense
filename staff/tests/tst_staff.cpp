@@ -2,6 +2,8 @@
 #include <QtTest>
 #include "staffui.h"
 #include "staffdata.h"
+#include "stafftraining.h"
+#include <functional>
 
 class StaffTests : public QObject {
     Q_OBJECT
@@ -45,6 +47,22 @@ class StaffTests : public QObject {
         });
         QTimer::singleShot(3000,this,[this]{if(auto *dialog=find<QDialog>("staffEditor"))dialog->reject();});
         find<QPushButton>("addStaff")->click();
+    }
+    bool setAssessment(QDialog *dialog,const QString &skill,int level) {
+        auto *grid=dialog->findChild<QTableWidget*>("trainingSkillsTable");
+        for(int row=0;row<grid->rowCount();++row)if(grid->item(row,0)->text()==skill){
+            auto *choice=qobject_cast<QComboBox*>(grid->cellWidget(row,2));
+            choice->setCurrentIndex(choice->findData(level));return true;
+        }
+        return false;
+    }
+    void useTraining(const std::function<void(QDialog*)> &action) {
+        bool opened=false;
+        QTimer watchdog;watchdog.setSingleShot(true);
+        connect(&watchdog,&QTimer::timeout,this,[this]{for(auto *dialog:canvas->findChildren<QDialog*>())if(dialog->isVisible())dialog->reject();});
+        watchdog.start(5000);
+        QTimer::singleShot(0,this,[&]{auto *dialog=find<QDialog>("staffTrainingDialog");if(dialog){opened=true;action(dialog);}});
+        find<QPushButton>("staffTraining")->click();QVERIFY(opened);
     }
 private slots:
     void init() { storageDirectory=new QTemporaryDir;QVERIFY(storageDirectory->isValid());openWindow(); }
@@ -165,6 +183,7 @@ private slots:
         auto *name=find<QLabel>("staffDetailName");
         QCOMPARE(name->toolTip(),QString(100,'W'));
         QVERIFY(QFontMetrics(name->font()).horizontalAdvance(name->text())<=name->width());
+        QVERIFY(find<QLabel>("staffDetailStatus")->geometry().right()<find<QPushButton>("staffTraining")->x());
     }
     void pdfExportCreatesDocument() {
         QTemporaryDir directory;QVERIFY(directory.isValid());
@@ -267,6 +286,134 @@ private slots:
         const QString corruptPath=storageDirectory->filePath("corrupt.json");QFile file(corruptPath);QVERIFY(file.open(QIODevice::WriteOnly));file.write("{invalid data");file.close();
         Staff::Store corrupt(corruptPath);QVERIFY(!corrupt.load(state,error));QVERIFY(!corrupt.save(state,error));
         QVERIFY(file.open(QIODevice::ReadOnly));QCOMPARE(file.readAll(),QByteArray("{invalid data"));
+    }
+    void trainingDistinguishesUnknownFromGapsAndPrioritizes() {
+        Staff::State state;Staff::Member member;member.role="Station Technician";
+        auto report=Staff::trainingReport(state,member);
+        QCOMPARE(report.required,3);QCOMPARE(report.assessed,0);QCOMPARE(report.unassessed.size(),3);QVERIFY(report.needs.isEmpty());
+        member.skills={{"Sensor installation",3},{"Sensor calibration",0},{"Fault diagnosis",1}};
+        report=Staff::trainingReport(state,member);
+        QCOMPARE(report.assessed,3);QCOMPARE(report.met,1);QVERIFY(report.unassessed.isEmpty());QCOMPARE(report.needs.size(),2);
+        QCOMPARE(report.needs[0].skill,QString("Sensor calibration"));QCOMPARE(report.needs[0].gap,2);
+        QCOMPARE(report.needs[1].skill,QString("Fault diagnosis"));QCOMPARE(report.needs[1].gap,1);
+        member.skills["Sensor calibration"]=2;member.skills["Fault diagnosis"]=3;
+        report=Staff::trainingReport(state,member);QVERIFY(report.needs.isEmpty());QCOMPARE(report.met,3);
+        member.role="  station TECHNICIAN ";member.skills={{"sensor   INSTALLATION",2}};
+        report=Staff::trainingReport(state,member);QCOMPARE(report.met,1);QCOMPARE(report.unassessed.size(),2);
+        member.role="New role without a profile";report=Staff::trainingReport(state,member);
+        QCOMPARE(report.required,0);QVERIFY(report.needs.isEmpty());
+    }
+    void trainingDialogPersistsAssessmentAndAudit() {
+        search->setText("Sophia Chen");
+        useTraining([&](QDialog *dialog){
+            auto *needs=dialog->findChild<QTableWidget*>("trainingNeedsTable");QCOMPARE(needs->rowCount(),0);
+            QVERIFY(setAssessment(dialog,"Sensor installation",2));QVERIFY(setAssessment(dialog,"Sensor calibration",0));QVERIFY(setAssessment(dialog,"Fault diagnosis",1));
+            QCOMPARE(needs->rowCount(),2);QCOMPARE(needs->item(0,0)->text(),QString("High"));QCOMPARE(needs->item(0,1)->text(),QString("Sensor calibration"));
+            QCOMPARE(needs->item(1,0)->text(),QString("Normal"));
+            QVERIFY(dialog->findChild<QLabel*>("trainingSummary")->text().contains("3 / 3"));
+            dialog->resize(860,620);QApplication::processEvents();
+            auto *skillGrid=dialog->findChild<QTableWidget*>("trainingSkillsTable");
+            auto *heading=dialog->findChild<QLabel*>("trainingRecommendationsHeading");
+            QVERIFY(heading->y()>skillGrid->geometry().bottom());
+            auto *scroll=dialog->findChild<QScrollArea*>("trainingScrollArea");
+            auto *saveButton=dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+            QVERIFY(saveButton->mapTo(dialog,QPoint()).y()>scroll->geometry().bottom());
+            const QString capture=qEnvironmentVariable("STAFF_TRAINING_CAPTURE");
+            if(!capture.isEmpty()){dialog->resize(1020,790);QApplication::processEvents();QVERIFY(dialog->grab().save(capture));}
+            save(dialog);
+        });
+        auto state=savedState();QCOMPARE(state.audit.first().action,QString("Training assessment updated"));
+        QVERIFY(state.audit.first().details.contains("Sensor calibration"));
+        delete root;openWindow();search->setText("Sophia Chen");
+        useTraining([&](QDialog *dialog){
+            auto *needs=dialog->findChild<QTableWidget*>("trainingNeedsTable");QCOMPARE(needs->rowCount(),2);
+            QVERIFY(setAssessment(dialog,"Sensor calibration",2));QCOMPARE(needs->rowCount(),1);save(dialog);
+        });
+        QCOMPARE(savedState().audit.size(),2);
+        search->setText("no matching record");QVERIFY(!find<QPushButton>("staffTraining")->isEnabled());
+    }
+    void trainingCancelDiscardsAssessmentAndRoleEdits() {
+        selectDaniel();const auto before=savedState();bool nested=false;
+        useTraining([&](QDialog *dialog){
+            QVERIFY(setAssessment(dialog,"Sensor calibration",0));
+            QTimer::singleShot(0,this,[&]{
+                auto *editor=dialog->findChild<QDialog*>("roleRequirementsEditor");if(!editor)return;
+                auto *grid=editor->findChild<QTableWidget*>("roleRequirementsTable");
+                qobject_cast<QComboBox*>(grid->cellWidget(0,1))->setCurrentIndex(0);save(editor);nested=true;
+            });
+            dialog->findChild<QPushButton*>("editRoleRequirements")->click();dialog->reject();
+        });
+        QVERIFY(nested);const auto after=savedState();QCOMPARE(after.revision,before.revision);
+        QCOMPARE(after.roleRequirements,before.roleRequirements);QVERIFY(after.audit.isEmpty());
+        for(const auto &member:after.members)QVERIFY(member.skills.isEmpty());
+    }
+    void trainingCustomRoleValidationAndSharedRequirements() {
+        createMember("Custom role member","custom@example.com");search->setText("custom@example.com");
+        QTimer::singleShot(0,this,[this]{auto *dialog=find<QDialog>("staffEditor");dialog->findChild<QComboBox*>("memberRole")->setEditText("Network Inspector");save(dialog);});
+        find<QPushButton>("editStaff")->click();
+        bool validated=false;
+        useTraining([&](QDialog *dialog){
+            QCOMPARE(dialog->findChild<QTableWidget*>("trainingSkillsTable")->rowCount(),0);
+            QVERIFY(dialog->findChild<QLabel*>("trainingEmptyState")->text().contains("No requirements"));
+            QTimer::singleShot(0,this,[&]{
+                auto *editor=dialog->findChild<QDialog*>("roleRequirementsEditor");if(!editor)return;
+                auto *add=editor->findChild<QPushButton*>("addRoleRequirement");add->click();save(editor);
+                QVERIFY(editor->isVisible());QVERIFY(!editor->findChild<QLabel*>("roleRequirementsError")->text().isEmpty());
+                auto *grid=editor->findChild<QTableWidget*>("roleRequirementsTable");
+                qobject_cast<QLineEdit*>(grid->cellWidget(0,0))->setText("Network inspection");add->click();
+                qobject_cast<QLineEdit*>(grid->cellWidget(1,0))->setText(" NETWORK INSPECTION ");save(editor);QVERIFY(editor->isVisible());
+                grid->selectRow(1);editor->findChild<QPushButton*>("removeRoleRequirement")->click();save(editor);validated=true;
+            });
+            dialog->findChild<QPushButton*>("editRoleRequirements")->click();
+            QCOMPARE(dialog->findChild<QTableWidget*>("trainingSkillsTable")->rowCount(),1);
+            QVERIFY(setAssessment(dialog,"Network inspection",1));save(dialog);
+        });
+        QVERIFY(validated);auto state=savedState();QCOMPARE(state.roleRequirements.value("Network Inspector").value("Network inspection"),2);
+        Staff::Member colleague;colleague.role="Network Inspector";colleague.skills={{"Network inspection",1}};
+        QCOMPARE(Staff::trainingReport(state,colleague).needs.size(),1);
+        delete root;openWindow();QCOMPARE(savedState().roleRequirements,state.roleRequirements);
+    }
+    void trainingRoleChangeRecalculatesWithoutErasingSkills() {
+        selectDaniel();
+        useTraining([&](QDialog *dialog){QVERIFY(setAssessment(dialog,"Sensor calibration",2));QVERIFY(setAssessment(dialog,"Fault diagnosis",2));QVERIFY(setAssessment(dialog,"Station configuration",2));save(dialog);});
+        QTimer::singleShot(0,this,[this]{auto *dialog=find<QDialog>("staffEditor");dialog->findChild<QComboBox*>("memberRole")->setCurrentText("Station Technician");save(dialog);});
+        find<QPushButton>("editStaff")->click();
+        useTraining([&](QDialog *dialog){
+            QCOMPARE(dialog->findChild<QTableWidget*>("trainingNeedsTable")->rowCount(),0);
+            QCOMPARE(dialog->findChild<QTableWidget*>("trainingSkillsTable")->rowCount(),4);
+            QVERIFY(dialog->findChild<QLabel*>("trainingSummary")->text().contains("1 to assess"));dialog->reject();
+        });
+        for(const auto &member:savedState().members)if(member.id=="STF-2025-008")QCOMPARE(member.skills.value("Station configuration"),2);
+    }
+    void trainingLegacyMigrationAndInvalidLevels() {
+        QFile original(storagePath());QVERIFY(original.open(QIODevice::ReadOnly));
+        auto legacy=QJsonDocument::fromJson(original.readAll()).object();original.close();
+        legacy["schema"]=1;legacy.remove("roleRequirements");auto records=legacy["members"].toArray();
+        for(int i=0;i<records.size();++i){auto row=records[i].toObject();row.remove("skills");records[i]=row;}legacy["members"]=records;
+        const auto legacyBytes=QJsonDocument(legacy).toJson();const QString path=storageDirectory->filePath("legacy.json");
+        QFile file(path);QVERIFY(file.open(QIODevice::WriteOnly));file.write(legacyBytes);file.close();
+        Staff::Store store(path);Staff::State state;QString error;QVERIFY2(store.load(state,error),qPrintable(error));
+        QCOMPARE(state.members.size(),12);QVERIFY(state.members.first().skills.isEmpty());QCOMPARE(state.roleRequirements.size(),8);
+        QVERIFY(file.open(QIODevice::ReadOnly));QCOMPARE(file.readAll(),legacyBytes);file.close();
+        const auto rights=state.permissions;state.members[0].skills={{"Team coordination",1}};QVERIFY(store.save(state,error));
+        Staff::State reloaded;QVERIFY(store.load(reloaded,error));QCOMPARE(reloaded.permissions,rights);QCOMPARE(reloaded.members[0].skills,state.members[0].skills);
+        QVERIFY(file.open(QIODevice::ReadOnly));const auto validBytes=file.readAll();file.close();QCOMPARE(QJsonDocument::fromJson(validBytes).object()["schema"].toInt(),2);
+        auto invalid=reloaded;invalid.members[0].skills["Bad level"]=4;QVERIFY(!store.save(invalid,error));
+        invalid=reloaded;invalid.members[0].skills["TEAM COORDINATION"]=2;QVERIFY(!store.save(invalid,error));
+        invalid=reloaded;invalid.roleRequirements["New role"]={{"Calibration",0}};QVERIFY(!store.save(invalid,error));
+        QVERIFY(file.open(QIODevice::ReadOnly));QCOMPARE(file.readAll(),validBytes);file.close();
+        auto malformed=QJsonDocument::fromJson(validBytes).object();auto malformedMembers=malformed["members"].toArray();
+        auto row=malformedMembers[0].toObject();row["skills"]=QJsonObject{{"Calibration",1.5}};malformedMembers[0]=row;malformed["members"]=malformedMembers;
+        QVERIFY(file.open(QIODevice::WriteOnly));file.write(QJsonDocument(malformed).toJson());file.close();QVERIFY(!store.load(reloaded,error));
+    }
+    void trainingConcurrentWriteRollsBackAssessment() {
+        selectDaniel();auto external=savedState();external.members[0].name="External edit";QString error;
+        QVERIFY(Staff::Store(storagePath()).save(external,error));bool warned=false;
+        QTimer driver;driver.setInterval(20);connect(&driver,&QTimer::timeout,this,[&]{for(auto *message:canvas->findChildren<QMessageBox*>())if(message->isVisible()){warned=message->text().contains("another instance");message->accept();}});driver.start();
+        useTraining([&](QDialog *dialog){QVERIFY(setAssessment(dialog,"Sensor calibration",0));save(dialog);});driver.stop();QVERIFY(warned);
+        useTraining([&](QDialog *dialog){QCOMPARE(dialog->findChild<QTableWidget*>("trainingNeedsTable")->rowCount(),0);dialog->reject();});
+        const auto saved=savedState();QCOMPARE(saved.members[0].name,QString("External edit"));QVERIFY(saved.audit.isEmpty());
+        for(const auto &member:saved.members)QVERIFY(member.skills.isEmpty());
     }
 };
 
