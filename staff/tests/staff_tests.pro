@@ -1,4 +1,4 @@
-QT += core gui widgets printsupport testlib
+QT += core gui widgets printsupport testlib sql
 CONFIG += c++17 console testcase
 CONFIG -= app_bundle
 TEMPLATE = app
@@ -6,5 +6,7 @@ TARGET = staff_tests
 INCLUDEPATH += ..
 SOURCES += tst_staff.cpp ../staffui.cpp ../staffdata.cpp ../stafftraining.cpp ../stafftrainingdialog.cpp
 HEADERS += ../staffui.h ../staffdata.h ../stafftraining.h
+SOURCES += ../stafforacle.cpp ../stafforacledialog.cpp
+HEADERS += ../stafforacle.h
 RESOURCES += ../resources.qrc
 win32-msvc*:QMAKE_CXXFLAGS += /utf-8

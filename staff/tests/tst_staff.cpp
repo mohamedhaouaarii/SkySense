@@ -3,6 +3,7 @@
 #include "staffui.h"
 #include "staffdata.h"
 #include "stafftraining.h"
+#include "stafforacle.h"
 #include <functional>
 
 class StaffTests : public QObject {
@@ -22,10 +23,11 @@ class StaffTests : public QObject {
     void selectDaniel() { search->setText("Daniel Kim"); }
     void save(QDialog *dialog) { dialog->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Save)->click(); }
     QString storagePath() const { return storageDirectory->filePath("staff.json"); }
-    void openWindow() {
+    void openWindow(bool requireOracle=false) {
         root = new QWidget;
         root->setAttribute(Qt::WA_DontShowOnScreen);
         root->setProperty("staffStoragePath",storagePath());
+        root->setProperty("staffOracleRequired",requireOracle);
         root->resize(1646,932);
         setupStaffUi(root);
         root->show();
@@ -38,14 +40,14 @@ class StaffTests : public QObject {
     }
     Staff::State savedState() const { Staff::State state;QString error;Staff::Store(storagePath()).load(state,error);return state; }
     void confirmDelete(QMessageBox::StandardButton answer) {
-        QTimer::singleShot(0,this,[this,answer]{for(auto *message:canvas->findChildren<QMessageBox*>())if(message->isVisible())message->button(answer)->click();});
+        QTimer::singleShot(0,this,[this,answer]{for(auto *message:root->findChildren<QMessageBox*>())if(message->isVisible())message->button(answer)->click();});
         find<QPushButton>("deleteStaff")->click();
     }
     void createMember(const QString &memberName,const QString &address) {
         QTimer::singleShot(0,this,[&,this]{auto *dialog=find<QDialog>("staffEditor");if(!dialog)return;
             dialog->findChild<QLineEdit*>("memberName")->setText(memberName);dialog->findChild<QLineEdit*>("memberEmail")->setText(address);save(dialog);
         });
-        QTimer::singleShot(3000,this,[this]{if(auto *dialog=find<QDialog>("staffEditor"))dialog->reject();});
+        QTimer::singleShot(3000,canvas,[this]{if(auto *dialog=find<QDialog>("staffEditor"))dialog->reject();});
         find<QPushButton>("addStaff")->click();
     }
     bool setAssessment(QDialog *dialog,const QString &skill,int level) {
@@ -67,6 +69,46 @@ class StaffTests : public QObject {
 private slots:
     void init() { storageDirectory=new QTemporaryDir;QVERIFY(storageDirectory->isValid());openWindow(); }
     void cleanup() { delete root;root=nullptr;delete storageDirectory;storageDirectory=nullptr; }
+
+    void oracleConfigKeepsCredentialsOutOfConnectionString() {
+        Staff::OracleConfig config{"Oracle test driver","localhost","xepdb1","project_user","Private;Password}",1521};
+        QVERIFY(Staff::validateOracleConfig(config).isEmpty());
+        const QString connection=Staff::oracleConnectionString(config);
+        QVERIFY(!connection.contains(config.password));QVERIFY(!connection.contains(config.user));
+        QVERIFY(connection.contains("DBQ=(DESCRIPTION="));
+        QVERIFY(connection.contains("(HOST=localhost)(PORT=1521)"));
+        QVERIFY(connection.contains("(SERVICE_NAME=xepdb1)"));
+        QVERIFY(!connection.contains("DBQ={")); // Regression: ORA-12154 with Oracle 21c ODBC.
+        config.host="localhost;UID=other";QVERIFY(!Staff::validateOracleConfig(config).isEmpty());
+        config.host="localhost)(PORT=9999)";QVERIFY(!Staff::validateOracleConfig(config).isEmpty());
+        config.host="localhost";config.service="xepdb1);UID=other";QVERIFY(!Staff::validateOracleConfig(config).isEmpty());
+        config.service="xepdb1";
+        config.host="localhost";config.password.clear();QVERIFY(!Staff::validateOracleConfig(config).isEmpty());
+    }
+    void oracleModeNeverSilentlyEditsTheLocalCopy() {
+        const auto before=savedState();delete root;openWindow(true);
+        QCOMPARE(table->rowCount(),0);
+        QVERIFY(!find<QPushButton>("addStaff")->isEnabled());
+        QVERIFY(!find<QPushButton>("editStaff")->isEnabled());
+        QVERIFY(find<QPushButton>("staffDatabase")->isEnabled());
+        QCOMPARE(savedState().revision,before.revision);
+        QCOMPARE(savedState().members.size(),before.members.size());
+    }
+    void oracleDialogValidatesBeforeConnectingAndCancelsCleanly() {
+        const int revision=savedState().revision;bool opened=false;
+        QTimer::singleShot(0,this,[&]{
+            auto *dialog=find<QDialog>("oracleConnectionDialog");if(!dialog)return;opened=true;
+            auto *password=dialog->findChild<QLineEdit*>("oraclePassword");QCOMPARE(password->echoMode(),QLineEdit::Password);
+            dialog->findChild<QLineEdit*>("oracleUser")->clear();password->clear();
+            dialog->findChild<QPushButton*>("testOracleConnection")->click();
+            QVERIFY(!dialog->findChild<QLabel*>("oracleConnectionStatus")->text().isEmpty());
+            const QString capture=qEnvironmentVariable("STAFF_ORACLE_CAPTURE");
+            if(!capture.isEmpty()){dialog->resize(740,650);QApplication::processEvents();QVERIFY(dialog->grab().save(capture));}
+            dialog->reject();
+        });
+        QTimer watchdog;watchdog.setSingleShot(true);connect(&watchdog,&QTimer::timeout,this,[this]{for(auto *dialog:canvas->findChildren<QDialog*>())if(dialog->isVisible())dialog->reject();});watchdog.start(5000);
+        find<QPushButton>("staffDatabase")->click();QVERIFY(opened);QCOMPARE(savedState().revision,revision);
+    }
 
     void initialDesignAndResize() {
         QCOMPARE(table->rowCount(),8);
@@ -139,7 +181,7 @@ private slots:
             dialog->findChild<QLineEdit*>("memberName")->setText("  Donia Test  ");
             save(dialog);exercised=true;
         });
-        QTimer::singleShot(3000,this,[this]{if(auto *dialog=find<QDialog>("staffEditor"))dialog->reject();});
+        QTimer::singleShot(3000,canvas,[this]{if(auto *dialog=find<QDialog>("staffEditor"))dialog->reject();});
         find<QPushButton>("addStaff")->click();
         QVERIFY(exercised);QCOMPARE(table->item(0,2)->text(),QString("Donia Test"));
         QCOMPARE(table->item(0,4)->text(),QString("Technical Specialist"));
@@ -194,12 +236,12 @@ private slots:
             if(auto *dialog=canvas->findChild<QFileDialog*>()){
                 if(dialog->isVisible()){dialog->selectFile(path);QMetaObject::invokeMethod(dialog,"accept");chosen=true;}
             }
-            for(auto *message:canvas->findChildren<QMessageBox*>())if(message->isVisible()){
+            for(auto *message:root->findChildren<QMessageBox*>())if(message->isVisible()){
                 confirmed=message->text().contains("saved successfully");message->accept();
             }
         });
         driver.start();
-        QTimer::singleShot(4000,this,[this]{for(auto *dialog:canvas->findChildren<QDialog*>())if(dialog->isVisible())dialog->reject();});
+        QTimer::singleShot(4000,canvas,[this]{for(auto *dialog:canvas->findChildren<QDialog*>())if(dialog->isVisible())dialog->reject();});
         find<QPushButton>("exportStaffPdf")->click();driver.stop();
         QVERIFY(chosen && confirmed);QFile file(path);QVERIFY(file.open(QIODevice::ReadOnly));
         QVERIFY(file.readAll().startsWith("%PDF-"));QVERIFY(file.size()>1000);
@@ -213,6 +255,71 @@ private slots:
         QTest::mouseClick(header->viewport(),Qt::LeftButton,Qt::NoModifier,nameHeader);
         QCOMPARE(table->item(0,2)->text(),QString("Sophia Chen"));
         search->setText("Data Analyst");QCOMPARE(table->rowCount(),2);QCOMPARE(table->item(0,2)->text(),QString("Mia Johnson"));
+    }
+    void deletionConfirmationRendersAndResponds_data() {
+        QTest::addColumn<QSize>("windowSize");
+        QTest::addColumn<int>("response");
+        QTest::newRow("compact-no") << QSize(1100,700) << 0;
+        QTest::newRow("original-yes") << QSize(1646,932) << 1;
+        QTest::newRow("large-escape") << QSize(1920,1080) << 2;
+    }
+    void deletionConfirmationRendersAndResponds() {
+        QFETCH(QSize,windowSize);
+        QFETCH(int,response);
+        root->resize(windowSize);QApplication::processEvents();selectDaniel();
+        auto *view=root->findChild<QGraphicsView*>("staffView");
+        auto *remove=find<QPushButton>("deleteStaff");
+        bool inspected=false,answered=false,timedOut=false;
+        QTimer watchdog;watchdog.setSingleShot(true);
+        connect(&watchdog,&QTimer::timeout,this,[&]{
+            timedOut=true;
+            for(auto *message:root->findChildren<QMessageBox*>())message->reject();
+        });
+        QTimer driver;driver.setInterval(30);
+        connect(&driver,&QTimer::timeout,this,[&]{
+            for(auto *message:root->findChildren<QMessageBox*>()){
+                if(!message->isVisible() || message->windowTitle()!="Delete Staff")continue;
+                driver.stop();
+                QVERIFY(message->testOption(QMessageBox::Option::DontUseNativeDialog));
+                QCOMPARE(message->textFormat(),Qt::PlainText);
+                QVERIFY(message->text().contains("Daniel Kim (STF-2025-008)"));
+                auto *yes=message->button(QMessageBox::Yes),*no=message->button(QMessageBox::No);
+                QVERIFY(yes && no);QVERIFY(yes->isVisible());QVERIFY(no->isVisible());
+                QCOMPARE(message->defaultButton(),qobject_cast<QPushButton*>(no));
+                QCOMPARE(message->escapeButton(),no);
+                auto *label=message->findChild<QLabel*>("qt_msgbox_label");
+                QVERIFY(label && label->isVisible());QVERIFY(!label->text().isEmpty());
+                QVERIFY(!message->graphicsProxyWidget());
+                QCOMPARE(message->parentWidget(),root->window());
+                for(auto *widget:QList<QWidget*>{label,yes,no}){
+                    const QRect area(widget->mapTo(message,QPoint()),widget->size());
+                    QVERIFY2(message->rect().contains(area),"Confirmation text and buttons must fit inside the dialog.");
+                }
+                QVERIFY(message->width()<=windowSize.width());
+                QVERIFY(message->height()<=windowSize.height());
+                const QString capture=qEnvironmentVariable("STAFF_DELETE_CAPTURE");
+                if(response==1 && !capture.isEmpty()){
+                    QVERIFY(message->grab().save(capture));
+                }
+                inspected=true;
+                if(response==2)QTest::keyClick(message,Qt::Key_Escape);
+                else {
+                    auto *choice=response==1?yes:no;
+                    QTest::mouseClick(choice,Qt::LeftButton);
+                }
+                answered=true;
+                return;
+            }
+        });
+        driver.start();watchdog.start(5000);
+        const QPoint point=view->mapFromScene(canvas->graphicsProxyWidget()->mapToScene(remove->geometry().center()));
+        QTest::mouseClick(view->viewport(),Qt::LeftButton,Qt::NoModifier,point);
+        driver.stop();watchdog.stop();
+        QVERIFY(!timedOut);QVERIFY(inspected && answered);
+        const auto state=savedState();
+        QCOMPARE(state.members.size(),response==1?11:12);
+        QCOMPARE(state.audit.size(),response==1?1:0);
+        if(response==1)QCOMPARE(state.audit.first().memberId,QString("STF-2025-008"));
     }
     void deletionCancellationPersistenceAndAudit() {
         selectDaniel();confirmDelete(QMessageBox::No);QCOMPARE(table->rowCount(),1);
@@ -274,7 +381,7 @@ private slots:
     void staleUiWriteRollsBack() {
         Staff::Store store(storagePath());auto external=savedState();external.members[0].name="External edit";QString error;QVERIFY(store.save(external,error));
         search->setText("Alex Martin");bool warned=false;
-        QTimer driver;driver.setInterval(20);connect(&driver,&QTimer::timeout,this,[&]{for(auto *message:canvas->findChildren<QMessageBox*>())if(message->isVisible()){warned=message->text().contains("another instance");message->accept();}});driver.start();
+        QTimer driver;driver.setInterval(20);connect(&driver,&QTimer::timeout,this,[&]{for(auto *message:root->findChildren<QMessageBox*>())if(message->isVisible()){warned=message->text().contains("another instance");message->accept();}});driver.start();
         QTimer::singleShot(0,this,[this]{auto *dialog=find<QDialog>("staffEditor");if(!dialog)return;dialog->findChild<QLineEdit*>("memberName")->setText("Must not overwrite");save(dialog);});
         find<QPushButton>("editStaff")->click();driver.stop();QVERIFY(warned);
         search->setText("Alex Martin");QCOMPARE(table->rowCount(),1);QCOMPARE(savedState().members[0].name,QString("External edit"));QVERIFY(savedState().audit.isEmpty());
@@ -409,7 +516,7 @@ private slots:
     void trainingConcurrentWriteRollsBackAssessment() {
         selectDaniel();auto external=savedState();external.members[0].name="External edit";QString error;
         QVERIFY(Staff::Store(storagePath()).save(external,error));bool warned=false;
-        QTimer driver;driver.setInterval(20);connect(&driver,&QTimer::timeout,this,[&]{for(auto *message:canvas->findChildren<QMessageBox*>())if(message->isVisible()){warned=message->text().contains("another instance");message->accept();}});driver.start();
+        QTimer driver;driver.setInterval(20);connect(&driver,&QTimer::timeout,this,[&]{for(auto *message:root->findChildren<QMessageBox*>())if(message->isVisible()){warned=message->text().contains("another instance");message->accept();}});driver.start();
         useTraining([&](QDialog *dialog){QVERIFY(setAssessment(dialog,"Sensor calibration",0));save(dialog);});driver.stop();QVERIFY(warned);
         useTraining([&](QDialog *dialog){QCOMPARE(dialog->findChild<QTableWidget*>("trainingNeedsTable")->rowCount(),0);dialog->reject();});
         const auto saved=savedState();QCOMPARE(saved.members[0].name,QString("External edit"));QVERIFY(saved.audit.isEmpty());

@@ -1,0 +1,9 @@
+QT += core sql
+QT -= gui
+CONFIG += console c++17
+TEMPLATE = app
+TARGET = oracle_check
+INCLUDEPATH += ..
+SOURCES += oracle_check.cpp ../stafforacle.cpp ../staffdata.cpp ../stafftraining.cpp
+HEADERS += ../stafforacle.h ../staffdata.h ../stafftraining.h
+RESOURCES += ../resources.qrc

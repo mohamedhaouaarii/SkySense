@@ -1,5 +1,16 @@
 SkySense — Gestion Staff | Qt 6.7.3
-Évolution du 14 octobre 2026 — Skills & Training, branche gestion-staff.
+Évolution Oracle du 15 octobre 2026 — branche gestion-staff.
+
+CONNEXION ORACLE
+Le bouton Database teste puis utilise Oracle via Qt QODBC. ORACLE_STAFF.md
+décrit les paramètres, l'import initial, les tables et les tests réels effectués.
+Le mot de passe est saisi localement à chaque session. Une fois Oracle choisi,
+une reconnexion est nécessaire après redémarrage. Sans ce choix, le mode JSON
+décrit plus bas reste disponible.
+database/oracle_staff.sql contient le schéma Oracle des neuf tables Staff.
+database/MODELES_STAFF.md décrit les modèles MCD/MLD/MPD de ce module et les
+éléments à valider avec l'équipe pour la base commune. Les paramètres privés,
+les mots de passe et les données enregistrées sur le poste ne sont pas versionnés.
 
 OUVRIR ET LANCER
 1. Extraire entièrement le ZIP.
@@ -69,7 +80,7 @@ copie de staff.json avant de revenir à une ancienne version.
 Pour sauvegarder vos données, fermer l'application puis copier staff.json.
 
 PÉRIMÈTRE
-Il n'y a ni serveur ni module Login ajouté. L'opérateur affiché et enregistré
+Oracle XE existant peut être utilisé ; aucun Login n'est ajouté. L'opérateur affiché et enregistré
 dans le journal correspond au nom de session Windows ; ce n'est pas une
 identité authentifiée par SkySense. Le journal local n'est pas inviolable.
 Staff::effectiveAccess fournit le calcul des droits effectifs ; les autres

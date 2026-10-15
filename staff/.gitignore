@@ -35,3 +35,5 @@ target_wrapper.*
 # Local Staff records (normally stored under AppData, outside the project)
 staff.json
 staff.json.lock
+oracle.local.ini
+*.credentials.ini

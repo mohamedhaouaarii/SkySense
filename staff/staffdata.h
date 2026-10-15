@@ -42,6 +42,7 @@ QString defaultStoragePath();
 Statistics statistics(const State &state);
 bool effectiveAccess(const State &state, const QString &id, int module);
 QString validateMember(const State &state, const Member &member, const QString &exceptId = {});
+bool validateState(const State &state,QString &error);
 
 // Local transactional storage. A failed write never replaces the previous file.
 // Revisions and a lock also prevent two open instances from losing each other's changes.

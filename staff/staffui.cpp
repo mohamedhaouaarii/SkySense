@@ -1,6 +1,7 @@
 #include "staffui.h"
 #include "staffdata.h"
 #include "stafftraining.h"
+#include "stafforacle.h"
 #include <QtWidgets>
 #include <algorithm>
 #include <limits>
@@ -15,6 +16,32 @@ QFont uiFont(int size, bool bold = false) {
     result.setWeight(bold ? QFont::DemiBold : QFont::Normal);
     return result;
 }
+
+QMessageBox::StandardButton staffMessage(QWidget *parent, QMessageBox::Icon icon,
+        const QString &title, const QString &message,
+        QMessageBox::StandardButtons buttons=QMessageBox::Ok,
+        QMessageBox::StandardButton defaultButton=QMessageBox::NoButton) {
+    // Give modal messages the real application window as owner. The Staff
+    // canvas is a graphics proxy; embedding a native message there can create
+    // an empty second window and interfere with mouse input.
+    QWidget *owner=parent;
+    if(auto *proxy=parent->graphicsProxyWidget()) {
+        if(proxy->scene() && !proxy->scene()->views().isEmpty())
+            owner=proxy->scene()->views().first()->window();
+    }
+    QMessageBox dialog(owner);
+    dialog.setOption(QMessageBox::Option::DontUseNativeDialog);
+    dialog.setStyleSheet(parent->styleSheet());
+    dialog.setWindowTitle(title);
+    dialog.setIcon(icon);
+    dialog.setTextFormat(Qt::PlainText);
+    dialog.setText(message);
+    dialog.setStandardButtons(buttons);
+    if(defaultButton!=QMessageBox::NoButton)dialog.setDefaultButton(defaultButton);
+    if(buttons.testFlag(QMessageBox::No))dialog.setEscapeButton(QMessageBox::No);
+    return static_cast<QMessageBox::StandardButton>(dialog.exec());
+}
+
 const QPixmap &reference() { static QPixmap image(":/assets/reference.png"); return image; }
 
 void drawSymbol(QPainter &p, const QString &name, QColor color) {
@@ -201,6 +228,7 @@ public:
 
 class StaffCanvas final : public QWidget {
     Store storage;
+    std::unique_ptr<OracleStore> oracle;
     State data;
     QList<Member> &members=data.members;
     QHash<QString,QList<bool>> &permissions=data.permissions;
@@ -222,20 +250,25 @@ class StaffCanvas final : public QWidget {
     QWidget *overview{}, *tabContent{};
     QTextBrowser *tabBrowser{};
     QList<QLabel*> recentTexts, recentDates;
-    QLabel *storageStatus{};
+    QLabel *storageStatus{},*storageKind{};
 public:
-    explicit StaffCanvas(const QString &path, QWidget *parent=nullptr):QWidget(parent),storage(path) {
+    explicit StaffCanvas(const QString &path, bool requireOracle, QWidget *parent=nullptr):QWidget(parent),storage(path) {
         setObjectName("staffCanvas"); setFixedSize(W,H);
         QFile sheet(":/styles/staff.qss"); if(sheet.open(QIODevice::ReadOnly))setStyleSheet(QString::fromUtf8(sheet.readAll()));
         QString error;
-        if(storage.exists()) writable=storage.load(data,error);
+        if(requireOracle)writable=false;
+        else if(storage.exists()) writable=storage.load(data,error);
         else {
             members=demoMembers();
             for(const auto &member:members)permissions.insert(member.id,{true,true,true,true});
             writable=storage.save(data,error);
         }
         buildSidebar(); buildHeader(); buildList(); buildDetails(); refresh();
-        if(!writable)QTimer::singleShot(0,this,[this,error]{QMessageBox::warning(this,"Staff data unavailable",error+"\n\n"+storage.path());});
+        if(requireOracle){
+            storageStatus->setText("Oracle: connection required");
+            storageStatus->setToolTip("Click Database and connect to load your Oracle Staff records.");
+            storageKind->setText("Click Database to connect");
+        }else if(!writable)QTimer::singleShot(0,this,[this,error]{staffMessage(this,QMessageBox::Warning,"Staff data unavailable",error+"\n\n"+storage.path());});
     }
 private:
     QList<AuditEntry> memberAudit() const {
@@ -245,9 +278,9 @@ private:
                  const QString &action, const QString &details, bool reveal=false) {
         data.audit.prepend({QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs),operatorName(),id,memberName,action,details});
         QString error;
-        if(!storage.save(data,error)) {
+        if(!(oracle?oracle->save(data,error):storage.save(data,error))) {
             data=before;populateRoles();refresh();
-            QMessageBox::warning(this,"Changes not saved",error+"\nYour change was not applied.");return false;
+            staffMessage(this,QMessageBox::Warning,"Changes not saved",error+"\nYour change was not applied.");return false;
         }
         populateRoles();refresh(reveal);return true;
     }
@@ -266,19 +299,33 @@ private:
         for(int i=0;i<5;++i) {
             auto *b=button(this,"",{},QRect(11,154+i*60,264,50)); b->setProperty("nav",true); b->setProperty("active",i==3);
             new Glyph(b,icons[i],QRect(20,12,27,27),i==3?Qt::white:QColor("#bbd9f6")); text(b,names[i],QRect(75,0,170,50),17,Qt::white);
-            connect(b,&QPushButton::clicked,this,[this,i]{if(i!=3)QMessageBox::information(this,"SkySense", "This standalone project contains the Staff module. Connect this navigation button to your "+QStringList{"Stations","Equipment","Maintenance","Staff","Services"}[i]+" page in the main project.");});
+            connect(b,&QPushButton::clicked,this,[this,i]{if(i!=3)staffMessage(this,QMessageBox::Information,"SkySense", "This standalone project contains the Staff module. Connect this navigation button to your "+QStringList{"Stations","Equipment","Maintenance","Staff","Services"}[i]+" page in the main project.");});
         }
         text(this,"Staff data",QRect(58,850,200,25),12,QColor("#bdd0e9"));
         storageStatus=text(this,writable?"Saved on this device":"Storage unavailable",QRect(58,877,222,23),12,Qt::white);
         storageStatus->setToolTip(QDir::toNativeSeparators(storage.path()));
-        text(this,"Local storage / JSON",QRect(58,900,222,23),12,QColor("#abc7e5"));
+        storageKind=text(this,"Local storage / JSON",QRect(58,900,222,23),12,QColor("#abc7e5"));
     }
     void buildHeader() {
-        search=new QLineEdit(this); search->setObjectName("staffSearch"); search->setGeometry(315,15,501,40);
+        search=new QLineEdit(this); search->setObjectName("staffSearch"); search->setGeometry(315,15,399,40);
         search->setPlaceholderText("Search staff, roles, departments, or email..."); search->setStyleSheet("QLineEdit { padding-left:45px; font-size:14px; background:#f4f8ff; }");
         search->setClearButtonEnabled(true);search->setAccessibleName("Search staff");
         auto searchPalette=search->palette();searchPalette.setColor(QPalette::PlaceholderText,muted);search->setPalette(searchPalette);
         new Glyph(search,"search",QRect(14,9,20,20),QColor("#7187c1"));
+        auto *databaseButton=button(this,"Database",{},QRect(724,15,96,40));databaseButton->setObjectName("staffDatabase");
+        connect(databaseButton,&QPushButton::clicked,this,[this]{
+            State local;QString error;
+            const bool localAvailable=storage.load(local,error);
+            if(connectOracleDialog(oracle,data,localAvailable?&local:nullptr,this)){
+                if(QFileInfo(storage.path()).absoluteFilePath()==QFileInfo(defaultStoragePath()).absoluteFilePath())
+                    QSettings("CoreVision","SkySense Staff").setValue("Oracle/enabled",true);
+                writable=true;addStaffButton->setEnabled(true);selectedId.clear();page=0;
+                {QSignalBlocker block(search);search->clear();}
+                populateRoles();statusFilter->setCurrentIndex(0);roleFilter->setCurrentIndex(0);refresh();
+                storageStatus->setText("Connected to Oracle");storageStatus->setToolTip(oracle->description());
+                storageKind->setText("Oracle / project schema");
+            }
+        });
         auto *stats=button(this,"Statistics","grid",QRect(832,15,138,40));stats->setObjectName("staffStatistics");connect(stats,&QPushButton::clicked,this,[this]{showStatistics();});
         auto *audit=button(this,"Activity Log","clock",QRect(982,15,155,40));audit->setObjectName("staffAudit");connect(audit,&QPushButton::clicked,this,[this]{showAudit();});
         new Glyph(this,"calendar",QRect(1185,24,24,24),QColor("#264788")); text(this,QLocale(QLocale::English).toString(QDate::currentDate(),"MMM d, yyyy"),QRect(1223,19,131,32),14,ink,true);
@@ -443,7 +490,7 @@ private:
         const State before=data;
         if(add){
             do {
-                if(data.nextId==std::numeric_limits<int>::max()){data=before;QMessageBox::warning(this,"Cannot add Staff","Staff identifier limit reached.");return;}
+                if(data.nextId==std::numeric_limits<int>::max()){data=before;staffMessage(this,QMessageBox::Warning,"Cannot add Staff","Staff identifier limit reached.");return;}
                 candidate.id=QString("STF-%1-%2").arg(QDate::currentDate().year()).arg(data.nextId++,3,10,QChar('0'));
             }while(std::any_of(members.cbegin(),members.cend(),[&](const Member &m){return m.id==candidate.id;}));
             candidate.login="Never";candidate.joined=QLocale(QLocale::English).toString(QDate::currentDate(),"MMM d, yyyy");
@@ -469,7 +516,7 @@ private:
     void deleteMember() {
         if(!writable || !selected())return;
         const Member member=*selected();
-        if(QMessageBox::question(this,"Delete Staff",QString("Delete %1 (%2)?\nThis removes the member and their permissions. The activity log is kept.").arg(member.name,member.id),QMessageBox::Yes|QMessageBox::No,QMessageBox::No)!=QMessageBox::Yes)return;
+        if(staffMessage(this,QMessageBox::Question,"Delete Staff",QString("Delete %1 (%2)?\nThis removes the member and their permissions. The activity log is kept.").arg(member.name,member.id),QMessageBox::Yes|QMessageBox::No,QMessageBox::No)!=QMessageBox::Yes)return;
         const State before=data;
         for(int i=0;i<members.size();++i)if(members[i].id==member.id){members.removeAt(i);break;}
         permissions.remove(member.id);
@@ -525,12 +572,12 @@ private:
     }
     void exportPdf() {
         QString path=QFileDialog::getSaveFileName(this,"Export Staff PDF","SkySense-Staff.pdf","PDF (*.pdf)");if(path.isEmpty())return;if(!path.endsWith(".pdf",Qt::CaseInsensitive))path+=".pdf";
-        QSaveFile output(path);if(!output.open(QIODevice::WriteOnly)){QMessageBox::warning(this,"Export failed",output.errorString());return;}
+        QSaveFile output(path);if(!output.open(QIODevice::WriteOnly)){staffMessage(this,QMessageBox::Warning,"Export failed",output.errorString());return;}
         {QPdfWriter writer(&output);writer.setPageSize(QPageSize(QPageSize::A4));writer.setPageOrientation(QPageLayout::Landscape);writer.setResolution(96);writer.setTitle("SkySense — Staff");
         QString html="<h1>SkySense — Staff</h1><p>Generated "+QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm")+" · "+QString::number(filtered.size())+" matching members</p><table border='1' cellspacing='0' cellpadding='7'><tr><th>Staff ID</th><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Status</th></tr>";
         for(int i:filtered){const auto &m=members[i];html+="<tr>";for(const auto &value:QStringList{m.id,m.name,m.email,m.role,m.department,m.status})html+="<td>"+value.toHtmlEscaped()+"</td>";html+="</tr>";}QTextDocument document;document.setHtml(html+"</table>");document.print(&writer);}
-        if(!output.commit()){QMessageBox::warning(this,"Export failed",output.errorString());return;}
-        QMessageBox::information(this,"Export PDF","Staff report saved successfully.");
+        if(!output.commit()){staffMessage(this,QMessageBox::Warning,"Export failed",output.errorString());return;}
+        staffMessage(this,QMessageBox::Information,"Export PDF","Staff report saved successfully.");
     }
 protected:
     void paintEvent(QPaintEvent *) override {
@@ -578,7 +625,10 @@ public:
         setObjectName("staffView");setFrameShape(QFrame::NoFrame);setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);setAlignment(Qt::AlignCenter);
         setBackgroundBrush(QColor("#f5f9ff"));setRenderHints(QPainter::Antialiasing|QPainter::SmoothPixmapTransform|QPainter::TextAntialiasing);
         QString path=parent->property("staffStoragePath").toString();if(path.isEmpty())path=qApp->property("staffStoragePath").toString();if(path.isEmpty())path=defaultStoragePath();
-        auto *scene=new QGraphicsScene(this);setScene(scene);canvas=new StaffCanvas(path);scene->addWidget(canvas);scene->setSceneRect(0,0,W,H);
+        const bool requireOracle=parent->property("staffOracleRequired").toBool()
+            || (QFileInfo(path).absoluteFilePath()==QFileInfo(defaultStoragePath()).absoluteFilePath()
+                && QSettings("CoreVision","SkySense Staff").value("Oracle/enabled",false).toBool());
+        auto *scene=new QGraphicsScene(this);setScene(scene);canvas=new StaffCanvas(path,requireOracle);scene->addWidget(canvas);scene->setSceneRect(0,0,W,H);
         canvas->setProperty("referenceWidth",W);
     }
     StaffCanvas *designCanvas() const { return canvas; }

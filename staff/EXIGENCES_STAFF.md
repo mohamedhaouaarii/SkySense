@@ -32,7 +32,8 @@ compétences évaluées avec leur niveau de maîtrise.
 | Update | Edit Staff ; activation/désactivation dans Actions ; modification de la note. |
 | Delete | Delete Staff avec confirmation ; suppression de la fiche et de ses habilitations. |
 
-Les changements sont sauvegardés localement en JSON et relus au lancement.
+Les changements sont sauvegardés en JSON local ou dans Oracle après connexion
+via Database. ORACLE_STAFF.md décrit le choix du stockage et la migration initiale.
 L'historique reste consultable après suppression d'une fiche.
 
 ## Fonctions existantes conservées
@@ -86,8 +87,9 @@ Les statuts Active/Inactive ne représentent pas une disponibilité à une date.
 - Les statistiques utilisent les fiches enregistrées ; aucune tendance ni
   invitation fictive n'est présentée comme un calcul réel.
 - Le journal est local, associé à l'opérateur Windows et non inviolable.
-- Le stockage est un fichier JSON local, pas une base SQL ni un serveur.
-  Le texte des exigences fourni n'impose pas de moteur de base de données.
+- L'évolution Oracle répond à la nouvelle consigne de connexion Qt/base SQL.
+  Le mode JSON reste disponible avant sélection d'Oracle ; les mots de passe
+  sont saisis à chaque connexion et ne sont pas versionnés.
 - Les dates Last Login des fiches initiales restent des exemples. Les horodatages
   des nouvelles opérations Staff sont réels.
 - Les modules Equipment, Stations, Maintenance, Services et Login sont préservés.

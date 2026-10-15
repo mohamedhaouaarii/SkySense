@@ -1,4 +1,20 @@
-Vérification du 14 octobre 2026 — évolution Skills & Training
+Vérification Oracle du 15 octobre 2026
+Compilation Release application, tests Qt et vérificateur Oracle : réussie.
+31 résultats Qt Test réussis, 0 échec.
+Connexion Qt QODBC à Oracle XE 21c et CRUD réel : réussis sur un compte
+temporaire supprimé après vérification. Aucun test n'a modifié les fiches DONIA.
+Création du schéma et lecture immédiate : réussies ; messages ODBC nettoyés.
+Donia a confirmé la connexion depuis sa fenêtre Qt, l'import de 12 membres,
+l'ajout de testoracle puis sa modification vers Inactive (13 membres).
+Correction de la confirmation Delete Staff vide : fenêtre Qt non native,
+rattachée à la véritable fenêtre de l'application, avec nom/identifiant visibles.
+Tests supplémentaires : affichage et clics Yes/No/Échap à trois dimensions.
+Donia a confirmé la suppression de testoracle après relance. Contrôle en lecture
+seule : 12 membres, aucune fiche STF-2026-013. CRUD confirmé dans son schéma.
+Compilation Debug dans le dossier utilisé par Qt Creator et relance : réussies.
+Détails et limites : ORACLE_STAFF.md. Livraison sur la branche gestion-staff.
+
+Historique : vérification du 14 octobre 2026 — évolution Skills & Training
 Validation du code avant publication sur gestion-staff.
 
 ENVIRONNEMENT

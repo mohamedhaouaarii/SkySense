@@ -3,5 +3,6 @@
   <file>styles/staff.qss</file>
   <file>assets/reference.png</file>
   <file>assets/skysense_logo.png</file>
+  <file>database/oracle_staff.sql</file>
  </qresource>
 </RCC>
