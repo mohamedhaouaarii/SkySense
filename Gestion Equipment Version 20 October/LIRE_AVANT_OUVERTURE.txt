@@ -1,0 +1,61 @@
+SkySense Qt - sources a ouvrir et compiler dans Qt Creator
+
+1. Ouvrir SkySense.pro avec Qt Creator.
+2. Choisir un kit Desktop Qt 6.11.2 MinGW 64-bit.
+3. Compiler puis lancer depuis Qt Creator.
+
+Ce dossier contient les sources Qt et les ressources de l'application. Il est
+prepare pour etre compile localement dans Qt Creator; ne pas distribuer le
+fichier executable genere dans le dossier de compilation.
+
+CONNEXION ORACLE
+
+- Le projet utilise Qt SQL, le pilote QODBC et le Singleton de Meyers dans
+  Connection.
+- Au lancement, saisir le nom de la source ODBC 64 bits, l'utilisateur Oracle
+  et le mot de passe Oracle. Le mot de passe n'est jamais enregistre.
+- Valeurs proposees au premier lancement: DSN SKYSENSE et utilisateur SKYSENSE.
+- Le DSN doit exister dans l'administrateur ODBC 64 bits et viser le service
+  Oracle XE.
+- Si la connexion est annulee ou echoue, l'application s'ouvre en mode apercu.
+  L'option --skip-oracle ouvre directement ce mode.
+- Aucune table n'est creee automatiquement et la base n'est pas modifiee au
+  lancement.
+
+GESTION EQUIPEMENT (travail individuel S6)
+
+- L'ajout, la consultation, la modification et la suppression utilisent la
+  table EQUIPEMENT quand Oracle est connecte.
+- Le modele C++ se trouve dans equipment.h/.cpp. Les requetes sont preparees
+  et les valeurs sont liees avec bindValue.
+- La cle primaire numero_serie et la cle unique identifiant_equipement sont
+  conservees. La station est liee par nom_station; emplacement est un attribut
+  separe, conforme au modele physique.
+- Les ajouts et modifications verifient les champs; les changements sont
+  regroupes dans une transaction. La liste est rechargee apres les operations.
+- Les stations proposees dans le formulaire sont lues depuis STATION.
+- Tri, recherche, export PDF, statistiques, evaluation de fraicheur et
+  proposition de remplacement compatible restent accessibles dans le module.
+- La fiche Health affiche les champs enregistres, le statut, la fraicheur,
+  la recommandation basee sur ces donnees et la photo enregistree.
+- Le PDF inclut la photo, l'emplacement et les champs disponibles. Aucune
+  mesure meteo simulee n'est presentee comme une donnee reelle; aucun tableau
+  supplementaire n'est necessaire.
+- Si Oracle n'est pas connecte, le module utilise des donnees d'aperçu en
+  memoire. Elles sont reinitialisees a la fermeture.
+
+LOGIN
+
+- L'authentification Oracle est demandee au lancement et donne acces a la base.
+- L'ecran de connexion SkySense est un ecran de session/aperçu; il ne verifie
+  pas le mot de passe d'un compte utilisateur. Le modele valide de cinq tables
+  ne contient pas de table de comptes ni de champ mot de passe dans PERSONNEL.
+  Ne pas presenter cet ecran comme une authentification securisee.
+
+AUTRES GESTIONS
+
+- Les modules Stations, Services, Maintenance et Personnel restent des
+  interfaces d'aperçu dans cette copie. Leurs CRUD ne sont pas connectes a
+  Oracle dans cette version individuelle.
+- La base commune reste limitee aux cinq tables approuvees: STATION,
+  EQUIPEMENT, MAINTENANCE, PERSONNEL et SERVICE.

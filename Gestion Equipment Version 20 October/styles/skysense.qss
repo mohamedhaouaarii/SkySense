@@ -1,0 +1,28 @@
+* { font-family: "Segoe UI"; font-size: 16px; color: #0b1f3a; }
+QMainWindow, QWidget#centralWidget, QWidget#rightPanel { background: #ffffff; }
+QLabel { background: transparent; }
+QLabel#headline, QLabel#headlineCyan { font-size: 52px; font-weight: 700; color: #ffffff; }
+QLabel#headlineCyan { color: #00bcec; }
+QLabel#supporting { font-size: 23px; color: #e1eaf7; }
+QLabel#featureTitle { font-size: 20px; font-weight: 700; color: #ffffff; }
+QLabel#featureSubtitle { font-size: 17px; color: #f0f5ff; }
+QLabel#welcomeTitle { font-size: 40px; font-weight: 700; color: #080d35; }
+QLabel#loginSubtitle { font-size: 19px; color: #506ca2; }
+QLabel#fieldLabel { font-size: 15px; font-weight: 500; color: #080d35; }
+QLineEdit { background: #f8fbff; color: #0b1f3a; border: 1px solid #cfdff5; border-radius: 10px; padding: 0 14px; selection-background-color: #0798e8; }
+QLineEdit:focus { border: 1px solid #0798e8; background: #ffffff; }
+QPushButton[link="true"] { color: #007bff; border: none; background: transparent; padding: 0; font-size: 15px; }
+QPushButton[link="true"]:hover { color: #0d47a1; text-decoration: underline; }
+QPushButton[link="true"]:focus { color: #0d47a1; border-bottom: 1px solid #0798e8; }
+QCheckBox { color: #080d35; spacing: 14px; min-height: 26px; }
+QCheckBox::indicator { width: 22px; height: 22px; border: 1px solid #cbd9e9; border-radius: 5px; background: #ffffff; }
+QCheckBox::indicator:checked { background: #007bff; border-color: #007bff; }
+QCheckBox::indicator:hover, QCheckBox::indicator:focus { border: 1px solid #0798e8; }
+QCheckBox:focus { color: #007bff; }
+QLabel#rememberNote { font-size: 15px; color: #627daf; }
+QPushButton#signInButton { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #159dff,stop:0.5 #007bff,stop:1 #005cf1); border: 1px solid #0784ff; border-radius: 12px; color: white; font-size: 23px; font-weight: 700; }
+QPushButton#signInButton:hover { background: #1594ff; }
+QPushButton#signInButton:pressed { background: #075bcd; }
+QPushButton#signInButton:focus { border: 2px solid #0b468f; }
+QLabel#contactLabel { font-size: 15px; color: #486594; }
+QLabel#footer { font-size: 13px; color: #627daf; }
