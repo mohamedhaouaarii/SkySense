@@ -1,3 +1,4 @@
+#include "apptheme.h"
 #include "staffui.h"
 #include "staffdata.h"
 #include <QtWidgets>
@@ -19,29 +20,29 @@ const QPixmap &reference() { static QPixmap image(":/assets/reference.png"); ret
 
 void drawSymbol(QPainter &p, const QString &name, QColor color) {
     p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QPen(color, 1.9, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p.setBrush(Qt::NoBrush);
+    p.setPen(AppTheme::pen(p, QPen(color, 1.9, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)));
+    p.setBrush(AppTheme::brush(p, Qt::NoBrush));
     QPainterPath path;
     if (name == "people" || name == "addperson" || name == "inactive") {
-        p.setPen(Qt::NoPen); p.setBrush(color); p.drawEllipse(QRectF(5, 2, 9, 9));
+        p.setPen(AppTheme::pen(p, Qt::NoPen)); p.setBrush(AppTheme::brush(p, color)); p.drawEllipse(QRectF(5, 2, 9, 9));
         path.moveTo(1, 23); path.lineTo(1, 19); path.cubicTo(1, 11, 18, 11, 18, 19); path.lineTo(18, 23); path.closeSubpath(); p.drawPath(path);
         if (name == "people") { p.drawEllipse(QRectF(15, 3, 7, 8)); p.drawRoundedRect(QRectF(18, 13, 6, 9), 3, 3); }
-        else { p.setPen(QPen(color, 2.8, Qt::SolidLine, Qt::RoundCap));
+        else { p.setPen(AppTheme::pen(p, QPen(color, 2.8, Qt::SolidLine, Qt::RoundCap)));
             p.drawLine(19, 13, 25, 13); if (name == "addperson") p.drawLine(22, 10, 22, 16);
             else { p.drawLine(20, 10, 24, 16); p.drawLine(24, 10, 20, 16); }
         }
     } else if (name == "clock") {
         p.drawEllipse(QRectF(2, 2, 20, 20)); p.drawLine(12, 6, 12, 12); p.drawLine(12, 12, 17, 15);
     } else if (name == "pin") {
-        p.setBrush(color); p.setPen(Qt::NoPen); path.moveTo(12, 24); path.cubicTo(8, 18, 3, 13, 3, 9); path.cubicTo(3, -2, 21, -2, 21, 9); path.cubicTo(21, 13, 16, 19, 12, 24); p.drawPath(path);
-        p.setBrush(QColor("#08223a")); p.drawEllipse(QRectF(8, 5, 8, 8));
+        p.setBrush(AppTheme::brush(p, color)); p.setPen(AppTheme::pen(p, Qt::NoPen)); path.moveTo(12, 24); path.cubicTo(8, 18, 3, 13, 3, 9); path.cubicTo(3, -2, 21, -2, 21, 9); path.cubicTo(21, 13, 16, 19, 12, 24); p.drawPath(path);
+        p.setBrush(AppTheme::brush(p, QColor("#08223a"))); p.drawEllipse(QRectF(8, 5, 8, 8));
     } else if (name == "equipment") {
-        p.setBrush(color); p.setPen(Qt::NoPen);
-        for (int y : {3, 15}) { p.drawRoundedRect(QRectF(1, y, 22, 8), 3, 3); p.setBrush(QColor("#08223a")); p.drawEllipse(QRectF(4, y+2, 4, 4)); p.drawRect(QRectF(18, y+3, 2, 2)); p.setBrush(color); }
+        p.setBrush(AppTheme::brush(p, color)); p.setPen(AppTheme::pen(p, Qt::NoPen));
+        for (int y : {3, 15}) { p.drawRoundedRect(QRectF(1, y, 22, 8), 3, 3); p.setBrush(AppTheme::brush(p, QColor("#08223a"))); p.drawEllipse(QRectF(4, y+2, 4, 4)); p.drawRect(QRectF(18, y+3, 2, 2)); p.setBrush(AppTheme::brush(p, color)); }
     } else if (name == "tool") {
         path.moveTo(16, 2); path.cubicTo(8, -1, 7, 6, 9, 10); path.lineTo(1, 19); path.lineTo(5, 23); path.lineTo(14, 14); path.cubicTo(23, 17, 26, 6, 21, 3); path.lineTo(17, 8); path.lineTo(13, 6); path.closeSubpath(); p.drawPath(path);
     } else if (name == "grid") {
-        p.setBrush(color); p.setPen(Qt::NoPen); for (int x : {2, 14}) for (int y : {2, 14}) p.drawRoundedRect(QRectF(x, y, 9, 9), 2, 2);
+        p.setBrush(AppTheme::brush(p, color)); p.setPen(AppTheme::pen(p, Qt::NoPen)); for (int x : {2, 14}) for (int y : {2, 14}) p.drawRoundedRect(QRectF(x, y, 9, 9), 2, 2);
     } else if (name == "search") {
         p.drawEllipse(QRectF(3, 3, 13, 13)); p.drawLine(15, 15, 22, 22);
     } else if (name == "calendar") {
@@ -53,7 +54,7 @@ void drawSymbol(QPainter &p, const QString &name, QColor color) {
         path.moveTo(2, 3); path.lineTo(22, 3); path.lineTo(15, 12); path.lineTo(15, 21); path.lineTo(10, 19); path.lineTo(10, 12); path.closeSubpath(); p.drawPath(path);
     } else if (name == "document" || name == "clipboard") {
         p.drawRoundedRect(QRectF(5, 3, 15, 20), 1.5, 1.5);
-        if (name == "clipboard") { p.setBrush(Qt::white); p.drawRoundedRect(QRectF(9, 1, 7, 5), 1, 1); }
+        if (name == "clipboard") { p.setBrush(AppTheme::brush(p, Qt::white)); p.drawRoundedRect(QRectF(9, 1, 7, 5), 1, 1); }
         else { p.drawLine(14, 3, 14, 8); p.drawLine(14, 8, 20, 8); }
         p.drawLine(9, 12, 16, 12); p.drawLine(9, 16, 16, 16);
     } else if (name == "plus") { p.drawLine(12, 4, 12, 20); p.drawLine(4, 12, 20, 12);
@@ -105,11 +106,11 @@ protected:
     void paintEvent(QPaintEvent *event) override { QComboBox::paintEvent(event); QPainter p(this); paintIcon(p,"down",QRectF(width()-30,height()/2-7,14,14),QColor("#325cac")); if(!glyph.isEmpty()) paintIcon(p,glyph,QRectF(18,height()/2-10,20,20),QColor("#234887")); }
 };
 void rounded(QPainter &p, QRectF rect, QColor fill, QColor stroke = line, qreal radius = 8) {
-    p.setPen(QPen(stroke, 1)); p.setBrush(fill); p.drawRoundedRect(rect, radius, radius);
+    p.setPen(AppTheme::pen(p, QPen(stroke, 1))); p.setBrush(AppTheme::brush(p, fill)); p.drawRoundedRect(rect, radius, radius);
 }
 void badge(QPainter &p, QRectF rect, const QString &value, QColor foreground, QColor background, int size = 12) {
-    p.setPen(Qt::NoPen); p.setBrush(background); p.drawRoundedRect(rect, rect.height()/2, rect.height()/2);
-    p.setPen(foreground); p.setFont(uiFont(size));
+    p.setPen(AppTheme::pen(p, Qt::NoPen)); p.setBrush(AppTheme::brush(p, background)); p.drawRoundedRect(rect, rect.height()/2, rect.height()/2);
+    p.setPen(AppTheme::pen(p, foreground)); p.setFont(uiFont(size));
     p.drawText(rect, Qt::AlignCenter, QFontMetrics(p.font()).elidedText(value, Qt::ElideRight, int(rect.width()) - 12));
 }
 
@@ -139,11 +140,11 @@ public:
 protected:
     void paintSection(QPainter *p, const QRect &r, int section) const override {
         p->save(); p->setRenderHint(QPainter::Antialiasing);
-        p->fillRect(r,QColor("#f3f8ff")); p->setPen(QColor("#e9f1fc")); p->drawLine(r.bottomLeft(),r.bottomRight());
+        p->fillRect(r,AppTheme::brush(*p, QColor("#f3f8ff"))); p->setPen(AppTheme::pen(*p, QColor("#e9f1fc"))); p->drawLine(r.bottomLeft(),r.bottomRight());
         if(section) p->drawLine(r.topLeft()+QPoint(0,5),r.bottomLeft()-QPoint(0,5));
         if(section==0) { rounded(*p,QRectF(r.left()+14,r.top()+10,16,16),checked?blue:QColor(Qt::white),checked?blue:QColor("#a3b1c6"),3); if(checked) paintIcon(*p,"check",QRectF(r.left()+14,r.top()+10,16,16),Qt::white); }
-        else { p->setFont(uiFont(12)); p->setPen(QColor("#173873")); const QString title=model()->headerData(section,Qt::Horizontal).toString(); p->drawText(r.adjusted(16,0,-5,0),Qt::AlignVCenter,title);
-            if(section==sortColumn) { const int x=r.right()-12, y=r.center().y(); const int d=sortOrder==Qt::AscendingOrder?-1:1; p->setPen(QPen(blue,1.8)); p->drawLine(x,y-5,x,y+5); p->drawLine(x-3,y+2*d,x,y+5*d); p->drawLine(x,y+5*d,x+3,y+2*d); }
+        else { p->setFont(uiFont(12)); p->setPen(AppTheme::pen(*p, QColor("#173873"))); const QString title=model()->headerData(section,Qt::Horizontal).toString(); p->drawText(r.adjusted(16,0,-5,0),Qt::AlignVCenter,title);
+            if(section==sortColumn) { const int x=r.right()-12, y=r.center().y(); const int d=sortOrder==Qt::AscendingOrder?-1:1; p->setPen(AppTheme::pen(*p, QPen(blue,1.8))); p->drawLine(x,y-5,x,y+5); p->drawLine(x-3,y+2*d,x,y+5*d); p->drawLine(x,y+5*d,x+3,y+2*d); }
         } p->restore();
     }
 };
@@ -153,13 +154,13 @@ public:
     void paint(QPainter *p,const QStyleOptionViewItem &option,const QModelIndex &index) const override {
         p->save(); p->setRenderHint(QPainter::Antialiasing); p->setRenderHint(QPainter::SmoothPixmapTransform);
         const QRect r=option.rect; const bool selected=option.state & QStyle::State_Selected; const int c=index.column();
-        p->fillRect(r,selected?QColor("#e0f1ff"):QColor("#ffffff")); p->setPen(QColor("#eaf1fc")); p->drawLine(r.bottomLeft(),r.bottomRight());
-        p->setFont(uiFont(12)); p->setPen(QColor("#274989"));
+        p->fillRect(r,AppTheme::brush(*p, selected?QColor("#e0f1ff"):QColor("#ffffff"))); p->setPen(AppTheme::pen(*p, QColor("#eaf1fc"))); p->drawLine(r.bottomLeft(),r.bottomRight());
+        p->setFont(uiFont(12)); p->setPen(AppTheme::pen(*p, QColor("#274989")));
         if(c==0) { const bool checked=index.data(Qt::CheckStateRole).toInt()==Qt::Checked; const QRectF box(r.left()+14,r.center().y()-8,16,16); rounded(*p,box,checked?blue:QColor(Qt::white),checked?blue:QColor("#a6b3c5"),3); if(checked)paintIcon(*p,"check",box,Qt::white); }
-        else if(c==2) { p->setPen(ink); const QRect copy=r.adjusted(16,0,-4,0);p->drawText(copy,Qt::AlignVCenter,QFontMetrics(p->font()).elidedText(index.data().toString(),Qt::ElideRight,copy.width())); }
+        else if(c==2) { p->setPen(AppTheme::pen(*p, ink)); const QRect copy=r.adjusted(16,0,-4,0);p->drawText(copy,Qt::AlignVCenter,QFontMetrics(p->font()).elidedText(index.data().toString(),Qt::ElideRight,copy.width())); }
         else if(c==4) { const auto colors=roleColors(index.data().toString()); badge(*p,QRectF(r.left()+15,r.center().y()-12,137,25),index.data().toString(),colors.first,colors.second); }
         else if(c==6) { bool active=index.data().toString()=="Active"; badge(*p,QRectF(r.left()+15,r.center().y()-12,94,25),index.data().toString(),QColor(active?"#008e3f":"#db001a"),QColor(active?"#d9fbeb":"#ffe1e4")); }
-        else if(c==7) { p->setPen(Qt::NoPen); p->setBrush(QColor("#254385")); for(int x:{-5,0,5})p->drawEllipse(QPointF(r.center().x()+x,r.center().y()),1.3,1.3); }
+        else if(c==7) { p->setPen(AppTheme::pen(*p, Qt::NoPen)); p->setBrush(AppTheme::brush(*p, QColor("#254385"))); for(int x:{-5,0,5})p->drawEllipse(QPointF(r.center().x()+x,r.center().y()),1.3,1.3); }
         else { const QRect copy=r.adjusted(16,0,-4,0);p->drawText(copy,Qt::AlignVCenter,QFontMetrics(p->font()).elidedText(index.data().toString(),Qt::ElideRight,copy.width())); }
         p->restore();
     }
@@ -604,18 +605,18 @@ private:
 protected:
     void paintEvent(QPaintEvent *) override {
         QPainter p(this);p.setRenderHint(QPainter::Antialiasing);p.setRenderHint(QPainter::SmoothPixmapTransform);
-        p.fillRect(rect(),QColor("#f6faff"));
+        p.fillRect(rect(),AppTheme::brush(p, QColor("#f6faff")));
         p.translate(-integratedSidebarWidth,0);
-        QLinearGradient body(285,66,1672,941);body.setColorAt(0,QColor("#f4faff"));body.setColorAt(1,Qt::white);p.fillRect(QRect(285,66,1387,875),body);
+        QLinearGradient body(285,66,1672,941);body.setColorAt(0,QColor("#f4faff"));body.setColorAt(1,Qt::white);p.fillRect(QRect(285,66,1387,875),AppTheme::brush(p, body));
         // Exact decorative artwork; no screenshot text or interactive area is used.
-        p.fillRect(QRect(0,0,285,H),QColor("#031b2c"));
+        p.fillRect(QRect(0,0,285,H),AppTheme::brush(p, QColor("#031b2c")));
         p.drawPixmap(QRect(0,444,285,398),reference(),QRect(0,444,285,398));
         p.drawPixmap(QRect(15,42,253,77),reference(),QRect(15,42,253,77));
-        p.setPen(QColor("#16415a"));p.drawLine(27,842,258,842);p.setPen(Qt::NoPen);p.setBrush(QColor("#00d195"));p.drawEllipse(QPointF(40,865),7,7);p.drawEllipse(QPointF(40,891),7,7);
-        p.fillRect(QRect(285,0,3,H),QColor("#d9e5f3"));
-        QLinearGradient top(0,0,0,66);top.setColorAt(0,QColor("#f8fbff"));top.setColorAt(1,QColor("#fdfefe"));p.fillRect(QRect(288,0,1384,66),top);
-        QLinearGradient shadow(0,66,0,77);shadow.setColorAt(0,QColor(161,190,227,30));shadow.setColorAt(1,QColor(161,190,227,0));p.fillRect(QRect(288,66,1384,11),shadow);
-        p.setPen(QColor("#cedff4"));p.drawLine(1387,18,1387,53);
+        p.setPen(AppTheme::pen(p, QColor("#16415a")));p.drawLine(27,842,258,842);p.setPen(AppTheme::pen(p, Qt::NoPen));p.setBrush(AppTheme::brush(p, QColor("#00d195")));p.drawEllipse(QPointF(40,865),7,7);p.drawEllipse(QPointF(40,891),7,7);
+        p.fillRect(QRect(285,0,3,H),AppTheme::brush(p, QColor("#d9e5f3")));
+        QLinearGradient top(0,0,0,66);top.setColorAt(0,QColor("#f8fbff"));top.setColorAt(1,QColor("#fdfefe"));p.fillRect(QRect(288,0,1384,66),AppTheme::brush(p, top));
+        QLinearGradient shadow(0,66,0,77);shadow.setColorAt(0,QColor(161,190,227,30));shadow.setColorAt(1,QColor(161,190,227,0));p.fillRect(QRect(288,66,1384,11),AppTheme::brush(p, shadow));
+        p.setPen(AppTheme::pen(p, QColor("#cedff4")));p.drawLine(1387,18,1387,53);
         const auto s=statistics(data);
         const QStringList titles{"Total Staff","Active Staff","Inactive Staff","Functions"};const QStringList numbers{QString::number(s.total),QString::number(s.active),QString::number(s.inactive),QString::number(s.functions.size())};
         const QStringList suffixes{"members",QString("/ %1 total").arg(s.total),QString("/ %1 total").arg(s.total),"functions"};
@@ -623,18 +624,18 @@ protected:
         const QStringList captions{"All saved staff",QString::number(s.total?100.0*s.active/s.total:0.0,'f',1)+"% of staff",QString::number(s.total?100.0*s.inactive/s.total:0.0,'f',1)+"% of staff",QString::number(s.functions.size())+" distinct functions"};
         const QColor accents[]{blue,QColor("#00c471"),QColor("#6f89b2"),QColor("#4f12ff")};const QColor fills[]{QColor("#f2f9ff"),QColor("#f2fdfa"),QColor("#fbfdff"),QColor("#f8f6ff")};const QStringList icons{"people","addperson","inactive","grid"};
         const int xs[]{315,651,987,1326}, widths[]{323,323,325,324};
-        for(int i=0;i<4;++i){const int x=xs[i];rounded(p,QRectF(x,157,widths[i],112),fills[i]);QColor bubble=accents[i];bubble.setAlpha(21);p.setPen(Qt::NoPen);p.setBrush(bubble);p.drawEllipse(QRectF(x+21,172,55,55));paintIcon(p,icons[i],QRectF(x+34,184,30,30),accents[i]);
-            p.setFont(uiFont(14,true));p.setPen(ink);p.drawText(QRect(x+102,171,219,24),Qt::AlignVCenter,titles[i]);auto numberFont=uiFont(numbers[i].size()>4?22:30,true);numberFont.setWeight(QFont::Bold);p.setFont(numberFont);const int numberWidth=QFontMetrics(numberFont).horizontalAdvance(numbers[i]);p.drawText(QRect(x+102,192,numberWidth+4,38),Qt::AlignVCenter,numbers[i]);
-            p.setFont(uiFont(14));p.setPen(muted);p.drawText(QRect(x+110+numberWidth,205,qMax(0,widths[i]-125-numberWidth),25),Qt::AlignVCenter,suffixes[i]);
+        for(int i=0;i<4;++i){const int x=xs[i];rounded(p,QRectF(x,157,widths[i],112),fills[i]);QColor bubble=accents[i];bubble.setAlpha(21);p.setPen(AppTheme::pen(p, Qt::NoPen));p.setBrush(AppTheme::brush(p, bubble));p.drawEllipse(QRectF(x+21,172,55,55));paintIcon(p,icons[i],QRectF(x+34,184,30,30),accents[i]);
+            p.setFont(uiFont(14,true));p.setPen(AppTheme::pen(p, ink));p.drawText(QRect(x+102,171,219,24),Qt::AlignVCenter,titles[i]);auto numberFont=uiFont(numbers[i].size()>4?22:30,true);numberFont.setWeight(QFont::Bold);p.setFont(numberFont);const int numberWidth=QFontMetrics(numberFont).horizontalAdvance(numbers[i]);p.drawText(QRect(x+102,192,numberWidth+4,38),Qt::AlignVCenter,numbers[i]);
+            p.setFont(uiFont(14));p.setPen(AppTheme::pen(p, muted));p.drawText(QRect(x+110+numberWidth,205,qMax(0,widths[i]-125-numberWidth),25),Qt::AlignVCenter,suffixes[i]);
             p.setFont(uiFont(12));p.drawText(QRect(x+102,232,207,22),Qt::AlignVCenter,captions[i]);
-            if(i==1 || i==2){p.setPen(Qt::NoPen);p.setBrush(QColor("#e4edf8"));p.drawRoundedRect(QRectF(x+102,258,195,4),2,2);
-                p.setBrush(accents[i]);p.drawRoundedRect(QRectF(x+102,258,195.0*amounts[i]/qMax(1,s.total),4),2,2);}
+            if(i==1 || i==2){p.setPen(AppTheme::pen(p, Qt::NoPen));p.setBrush(AppTheme::brush(p, QColor("#e4edf8")));p.drawRoundedRect(QRectF(x+102,258,195,4),2,2);
+                p.setBrush(AppTheme::brush(p, accents[i]));p.drawRoundedRect(QRectF(x+102,258,195.0*amounts[i]/qMax(1,s.total),4),2,2);}
         }
         rounded(p,QRectF(315,281,1335,369),Qt::white);
-        p.setPen(QColor("#e7effb"));p.drawLine(1482,294,1482,324);
-        rounded(p,QRectF(315,663,1335,278),Qt::white);p.setPen(QColor("#e5eefb"));p.drawLine(316,741,1649,741);p.drawLine(325,772,1430,772);p.drawLine(1118,679,1118,714);p.drawLine(1331,679,1331,714);p.drawLine(1505,679,1505,714);
+        p.setPen(AppTheme::pen(p, QColor("#e7effb")));p.drawLine(1482,294,1482,324);
+        rounded(p,QRectF(315,663,1335,278),Qt::white);p.setPen(AppTheme::pen(p, QColor("#e5eefb")));p.drawLine(316,741,1649,741);p.drawLine(325,772,1430,772);p.drawLine(1118,679,1118,714);p.drawLine(1331,679,1331,714);p.drawLine(1505,679,1505,714);
         if(tab==0 && selected()){rounded(p,QRectF(325,778,449,162),QColor("#fdfeff"));rounded(p,QRectF(785,778,420,162),QColor("#fdfeff"));rounded(p,QRectF(1216,778,421,162),QColor("#fdfeff"));
-            p.setPen(line);p.drawLine(335,814,764,814);p.drawLine(795,814,1195,814);p.drawLine(1226,814,1627,814);
+            p.setPen(AppTheme::pen(p, line));p.drawLine(335,814,764,814);p.drawLine(795,814,1195,814);p.drawLine(1226,814,1627,814);
         }else if(selected())rounded(p,QRectF(325,778,1312,162),QColor("#fdfeff"));
     }
 };

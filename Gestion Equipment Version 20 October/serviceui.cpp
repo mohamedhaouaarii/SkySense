@@ -1,3 +1,4 @@
+#include "apptheme.h"
 #include "serviceui.h"
 #include "connection.h"
 #include <QApplication>
@@ -67,8 +68,8 @@ const QColor navy("#091b40"), muted("#5d77ad"), blue("#0785ff");
 void symbol(QPainter &p, const QString &name, QColor color)
 {
     p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p.setBrush(Qt::NoBrush);
+    p.setPen(AppTheme::pen(p, QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)));
+    p.setBrush(AppTheme::brush(p, Qt::NoBrush));
     QPainterPath path;
     if (name == "home") {
         path.moveTo(2,11); path.lineTo(12,2); path.lineTo(22,11); path.moveTo(5,9); path.lineTo(5,22); path.lineTo(19,22); path.lineTo(19,9); p.drawPath(path); p.drawRect(QRectF(10,15,4,7));
@@ -177,11 +178,11 @@ protected:
         const bool selected=day==selectedDate(), today=day==QDate::currentDate();
         const bool inMonth=day.month()==monthShown() && day.year()==yearShown();
         const QRectF cell=QRectF(rect).adjusted(3,3,-3,-3);
-        painter->fillRect(rect,Qt::white);
-        painter->setPen(today&&!selected?QPen(blue,1.3):QPen(Qt::NoPen)); painter->setBrush(selected?blue:today?QColor("#eef6ff"):Qt::white);
+        painter->fillRect(rect,AppTheme::brush(*painter, Qt::white));
+        painter->setPen(AppTheme::pen(*painter, today&&!selected?QPen(blue,1.3):QPen(Qt::NoPen))); painter->setBrush(AppTheme::brush(*painter, selected?blue:today?QColor("#eef6ff"):Qt::white));
         painter->drawRoundedRect(cell,8,8);
         QFont font("Segoe UI"); font.setPixelSize(14); font.setBold(selected||today); painter->setFont(font);
-        painter->setPen(selected?Qt::white:!inMonth?QColor("#a1aec0"):day.dayOfWeek()>5?QColor("#62738c"):navy);
+        painter->setPen(AppTheme::pen(*painter, selected?Qt::white:!inMonth?QColor("#a1aec0"):day.dayOfWeek()>5?QColor("#62738c"):navy));
         painter->drawText(rect,Qt::AlignCenter,QString::number(day.day())); painter->restore();
     }
 };
@@ -232,13 +233,13 @@ public:
 protected:
     void paintEvent(QPaintEvent *) override {
         QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
-        if(bubble) { QColor bg=color; bg.setAlpha(22); p.setPen(Qt::NoPen); p.setBrush(bg); p.drawEllipse(rect()); }
+        if(bubble) { QColor bg=color; bg.setAlpha(22); p.setPen(AppTheme::pen(p, Qt::NoPen)); p.setBrush(AppTheme::brush(p, bg)); p.drawEllipse(rect()); }
         qreal margin=bubble?width()*.25:2; p.translate(margin,margin); p.scale((width()-2*margin)/24.0,(height()-2*margin)/24.0); symbol(p,name,color);
     }
 };
 
 class Sidebar final : public QWidget {
-    QPixmap photo{":/assets/backgrounds/services_alps.png"};
+
     std::function<void(const QString &)> navigate;
     QStringList navigationNames;
     QList<QPushButton *> navigationButtons;
@@ -249,7 +250,11 @@ public:
         auto *column=new QVBoxLayout(this); column->setContentsMargins(10,20,10,18); column->setSpacing(4);
         auto *brand=new QLabel; brand->setObjectName("sidebarBrand"); brand->setFixedSize(250,98);
         brand->setPixmap(QPixmap(":/assets/logo/skysense_logo.png").scaled(244,88,Qt::KeepAspectRatio,Qt::SmoothTransformation));
-        brand->setAlignment(Qt::AlignCenter); column->addWidget(brand); column->addSpacing(15);
+        brand->setAlignment(Qt::AlignCenter);
+        auto *brandGlow=new QGraphicsDropShadowEffect(brand);
+        brandGlow->setBlurRadius(20); brandGlow->setOffset(0,2); brandGlow->setColor(QColor(25,150,255,105));
+        brand->setGraphicsEffect(brandGlow);
+        column->addWidget(brand); column->addSpacing(15);
         const QStringList names{"Dashboard","Stations","Equipment","Maintenance","Staff","Services"};
         navigationNames=names;
         const QStringList icons{"home","pin","equipment","tool","people","grid"};
@@ -267,6 +272,12 @@ public:
             });
         }
         column->addStretch();
+        auto *themeRow = new QHBoxLayout;
+        themeRow->setContentsMargins(16, 12, 16, 10);
+        auto *workspaceTheme = new ThemeSwitch(this);
+        workspaceTheme->setObjectName("workspaceThemeSwitch");
+        themeRow->addWidget(workspaceTheme); themeRow->addStretch();
+        column->addLayout(themeRow);
         auto *statusBox=new QVBoxLayout; statusBox->setContentsMargins(16,12,4,0); statusBox->setSpacing(5);
         statusBox->addWidget(text("System Status","sidebarStatus"));
         const bool oracleConnected = Connection::createInstance().isConnected();
@@ -286,10 +297,19 @@ public:
     }
 protected:
     void paintEvent(QPaintEvent *) override {
-        QPainter p(this); p.fillRect(rect(),QColor("#071a33")); p.setRenderHint(QPainter::SmoothPixmapTransform);
-        QRectF area(0,height()*.35,width(),height()*.65); QSizeF size=photo.size(); size.scale(area.size(),Qt::KeepAspectRatioByExpanding);
-        p.save(); p.setClipRect(area); p.drawPixmap(QRectF((width()-size.width())*.15,area.top()+(area.height()-size.height())/2,size.width(),size.height()),photo,photo.rect()); p.restore();
-        QLinearGradient g(0,area.top(),0,height()); g.setColorAt(0,QColor(7,26,51,255)); g.setColorAt(.34,QColor(7,26,51,100)); g.setColorAt(.7,QColor(7,26,51,22)); g.setColorAt(1,QColor(7,26,51,225)); p.fillRect(area,g);
+        QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
+        QLinearGradient base(0,0,width(),height());
+        base.setColorAt(0,QColor("#091c35"));base.setColorAt(.6,QColor("#102b49"));base.setColorAt(1,QColor("#071629"));
+        p.fillRect(rect(),base);
+        const QPointF center(width()*.84,height()*.7);
+        QRadialGradient aura(center,width()*1.15);
+        aura.setColorAt(0,QColor(20,156,195,45));aura.setColorAt(1,Qt::transparent);p.fillRect(rect(),aura);
+        p.save();p.setClipRect(QRectF(0,height()*.56,width(),height()*.25));
+        p.translate(center);p.rotate(-24);p.setBrush(Qt::NoBrush);
+        for(int i=0;i<6;++i){p.setPen(QPen(QColor(101,215,238,18+i*3),.8));p.drawEllipse(QPointF(),70+i*24,26+i*12);}
+        p.restore();
+        p.setPen(QPen(QColor(121,188,224,35),1));p.drawLine(width()-1,0,width()-1,height());
+        QLinearGradient footer(0,height()-175,0,height());footer.setColorAt(0,Qt::transparent);footer.setColorAt(1,QColor(3,13,29,180));p.fillRect(rect(),footer);
     }
 };
 
@@ -411,10 +431,10 @@ bool writeServicesPdf(const QString &path,const QVector<ServiceRecord> &records,
     int pageNumber=1,y=0;
 
     auto useFont=[&](int pixels,QFont::Weight weight=QFont::Normal,const QColor &color=QColor("#091b40")) {
-        QFont font("Segoe UI"); font.setPixelSize(pixels); font.setWeight(weight); painter.setFont(font); painter.setPen(color);
+        QFont font("Segoe UI"); font.setPixelSize(pixels); font.setWeight(weight); painter.setFont(font); painter.setPen(AppTheme::pen(painter, color));
     };
     auto footer=[&] {
-        painter.setPen(line); painter.drawLine(contentLeft,page.bottom()-footerHeight,contentRight,page.bottom()-footerHeight);
+        painter.setPen(AppTheme::pen(painter, line)); painter.drawLine(contentLeft,page.bottom()-footerHeight,contentRight,page.bottom()-footerHeight);
         useFont(11,QFont::Normal,secondary);
         painter.drawText(QRect(contentLeft,page.bottom()-footerHeight+8,contentWidth,20),Qt::AlignLeft|Qt::AlignVCenter,
                          "SkySense • Smart Weather Management");
@@ -422,7 +442,7 @@ bool writeServicesPdf(const QString &path,const QVector<ServiceRecord> &records,
                          QString("Page %1").arg(pageNumber));
     };
     auto reportHeader=[&](bool includeSummary) {
-        painter.fillRect(page,Qt::white);
+        painter.fillRect(page,AppTheme::brush(painter, Qt::white));
         QPixmap logo(":/assets/logo/skysense_logo.png");
         if(!logo.isNull()) painter.drawPixmap(QRect(contentLeft,y,190,66),logo.scaled(190,66,Qt::KeepAspectRatio,Qt::SmoothTransformation));
         useFont(25,QFont::Bold,dark);
@@ -430,7 +450,7 @@ bool writeServicesPdf(const QString &path,const QVector<ServiceRecord> &records,
         useFont(12,QFont::Normal,secondary);
         painter.drawText(QRect(contentLeft+215,y+38,contentWidth-215,22),Qt::AlignLeft|Qt::AlignVCenter,
                           QString("Report date %1 • %2 service records").arg(QLocale(QLocale::English).toString(reportDate,"dd MMMM yyyy")).arg(records.size()));
-        y+=78; painter.fillRect(QRect(contentLeft,y,contentWidth,3),accent); y+=18;
+        y+=78; painter.fillRect(QRect(contentLeft,y,contentWidth,3),AppTheme::brush(painter, accent)); y+=18;
         if(includeSummary) {
             const QStringList labels{"Total","Scheduled","In Progress","Completed","Overdue"};
             QVector<int> values{int(records.size()),0,0,0,0};
@@ -443,7 +463,7 @@ bool writeServicesPdf(const QString &path,const QVector<ServiceRecord> &records,
             const int gap=12,cardWidth=(contentWidth-gap*4)/5;
             for(int i=0;i<labels.size();++i) {
                 const QRect card(contentLeft+i*(cardWidth+gap),y,cardWidth,70);
-                painter.setPen(QPen(line,1)); painter.setBrush(i==0?QColor("#eef7ff"):surface); painter.drawRoundedRect(card,10,10);
+                painter.setPen(AppTheme::pen(painter, QPen(line,1))); painter.setBrush(AppTheme::brush(painter, i==0?QColor("#eef7ff"):surface)); painter.drawRoundedRect(card,10,10);
                 useFont(12,QFont::DemiBold,secondary); painter.drawText(card.adjusted(14,8,-10,-36),Qt::AlignLeft|Qt::AlignVCenter,labels[i]);
                 useFont(24,QFont::Bold,i==0?accent:dark); painter.drawText(card.adjusted(14,30,-10,-5),Qt::AlignLeft|Qt::AlignVCenter,QString::number(values[i]));
             }
@@ -455,7 +475,7 @@ bool writeServicesPdf(const QString &path,const QVector<ServiceRecord> &records,
                 if(finishedLate(record)) ++late;
             }
             const QRect summary(contentLeft,y,contentWidth,48);
-            painter.setPen(QPen(line,1)); painter.setBrush(QColor("#f8fbff")); painter.drawRoundedRect(summary,8,8);
+            painter.setPen(AppTheme::pen(painter, QPen(line,1))); painter.setBrush(AppTheme::brush(painter, QColor("#f8fbff"))); painter.drawRoundedRect(summary,8,8);
             useFont(12,QFont::DemiBold,dark); painter.drawText(summary.adjusted(14,5,-14,-25),Qt::AlignLeft|Qt::AlignVCenter,"Completion summary");
             useFont(11,QFont::Normal,secondary);
             painter.drawText(summary.adjusted(14,23,-14,-4),Qt::AlignLeft|Qt::AlignVCenter,
@@ -474,7 +494,7 @@ bool writeServicesPdf(const QString &path,const QVector<ServiceRecord> &records,
         widths.append(width); used+=width;
     }
     auto tableHeader=[&] {
-        int x=contentLeft; painter.fillRect(QRect(contentLeft,y,contentWidth,headerRowHeight),QColor("#eaf4ff"));
+        int x=contentLeft; painter.fillRect(QRect(contentLeft,y,contentWidth,headerRowHeight),AppTheme::brush(painter, QColor("#eaf4ff")));
         useFont(12,QFont::DemiBold,dark);
         for(int i=0;i<headings.size();++i) {
             painter.drawText(QRect(x+8,y,widths[i]-16,headerRowHeight),Qt::AlignLeft|Qt::AlignVCenter,headings[i]);
@@ -489,8 +509,8 @@ bool writeServicesPdf(const QString &path,const QVector<ServiceRecord> &records,
             footer(); pdf.newPage(); ++pageNumber; y=page.top(); reportHeader(false); tableHeader();
         }
         const auto &record=records[index];
-        if(index%2) painter.fillRect(QRect(contentLeft,y,contentWidth,rowHeight),QColor("#f8fbff"));
-        painter.setPen(line); painter.drawLine(contentLeft,y+rowHeight,contentRight,y+rowHeight);
+        if(index%2) painter.fillRect(QRect(contentLeft,y,contentWidth,rowHeight),AppTheme::brush(painter, QColor("#f8fbff")));
+        painter.setPen(AppTheme::pen(painter, line)); painter.drawLine(contentLeft,y+rowHeight,contentRight,y+rowHeight);
         const QStringList values{
             record.id,record.title,record.type,record.stationCode+"\n"+record.stationName,record.assignee,
             record.date+"\n"+record.startTime+" – "+record.endTime,record.priority,record.status
@@ -501,7 +521,7 @@ bool writeServicesPdf(const QString &path,const QVector<ServiceRecord> &records,
             QColor valueColor=dark;
             if(column==6) valueColor=record.priority=="High"?QColor("#d9363e"):record.priority=="Medium"?QColor("#b77900"):QColor("#168653");
             if(column==7) valueColor=record.status=="Overdue"?QColor("#d9363e"):record.status=="Completed"?QColor("#168653"):QColor("#246ec5");
-            painter.setPen(valueColor);
+            painter.setPen(AppTheme::pen(painter, valueColor));
             painter.drawText(QRect(x+8,y+5,widths[column]-16,rowHeight-10),Qt::AlignLeft|Qt::AlignVCenter|Qt::TextWordWrap,values[column]);
             x+=widths[column];
         }
@@ -541,11 +561,11 @@ public:
         const bool checked=index.siblingAtColumn(0).data(Qt::CheckStateRole).toInt()==Qt::Checked;
         const ServiceRecord &record=serviceRecords[row];
         const bool hovered=(o.state & QStyle::State_MouseOver) && !checked;
-        p->fillRect(r,checked?QColor("#e5f4ff"):hovered?QColor("#f2f8ff"):Qt::white); p->setPen(QColor("#e5eef9")); p->drawLine(r.bottomLeft(),r.bottomRight());
-        QFont font("Segoe UI"); font.setPixelSize(13); p->setFont(font); p->setPen(navy);
+        p->fillRect(r,AppTheme::brush(*p, checked?QColor("#e5f4ff"):hovered?QColor("#f2f8ff"):Qt::white)); p->setPen(AppTheme::pen(*p, QColor("#e5eef9"))); p->drawLine(r.bottomLeft(),r.bottomRight());
+        QFont font("Segoe UI"); font.setPixelSize(13); p->setFont(font); p->setPen(AppTheme::pen(*p, navy));
         if(col==0) {
-            if(checked) p->fillRect(QRect(r.left(),r.top(),3,r.height()),blue);
-            QRectF box(r.center().x()-8,r.center().y()-8,16,16); p->setPen(QPen(checked?blue:QColor("#8ca7d3"),1.3)); p->setBrush(checked?blue:Qt::white); p->drawRoundedRect(box,3,3);
+            if(checked) p->fillRect(QRect(r.left(),r.top(),3,r.height()),AppTheme::brush(*p, blue));
+            QRectF box(r.center().x()-8,r.center().y()-8,16,16); p->setPen(AppTheme::pen(*p, QPen(checked?blue:QColor("#8ca7d3"),1.3))); p->setBrush(AppTheme::brush(*p, checked?blue:Qt::white)); p->drawRoundedRect(box,3,3);
             if(checked) { p->translate(box.topLeft()); p->scale(16.0/24,16.0/24); symbol(*p,"check",Qt::white); }
         } else if(col==1) {
             font.setBold(true); p->setFont(font); p->drawText(r.adjusted(9,0,-3,0),Qt::AlignVCenter,record.id);
@@ -553,19 +573,19 @@ public:
             p->save(); p->translate(r.left()+8,r.center().y()-11); symbol(*p,glyphForType(record.type),blue); p->restore();
             font.setBold(true); p->setFont(font); p->drawText(r.adjusted(39,0,-4,0),Qt::AlignVCenter,record.title);
         } else if(col==3) {
-            p->setPen(muted); p->drawText(r.adjusted(8,0,-3,0),Qt::AlignVCenter,record.type);
+            p->setPen(AppTheme::pen(*p, muted)); p->drawText(r.adjusted(8,0,-3,0),Qt::AlignVCenter,record.type);
         } else if(col==4) {
             font.setBold(true); p->setFont(font); p->drawText(r.adjusted(8,3,-3,-r.height()/2+2),Qt::AlignVCenter,record.stationCode);
-            font.setBold(false); p->setFont(font); p->setPen(muted); p->drawText(r.adjusted(8,r.height()/2-1,-3,-3),Qt::AlignVCenter,record.stationName);
+            font.setBold(false); p->setFont(font); p->setPen(AppTheme::pen(*p, muted)); p->drawText(r.adjusted(8,r.height()/2-1,-3,-3),Qt::AlignVCenter,record.stationName);
         } else if(col==5) {
             const QString initials=record.assignee.split(' ').value(0).left(1)+record.assignee.split(' ').value(1).left(1);
             const QColor avatar[]={QColor("#e3efff"),QColor("#fbe9e1"),QColor("#e8e4fb"),QColor("#f8e9f0"),QColor("#e5f5ec"),QColor("#f2eddf")};
-            p->setPen(Qt::NoPen); p->setBrush(avatar[row%6]); p->drawEllipse(QRectF(r.left()+7,r.center().y()-13,26,26));
-            p->setPen(QColor("#28517c")); p->drawText(QRectF(r.left()+7,r.center().y()-13,26,26),Qt::AlignCenter,initials);
-            p->setPen(navy); p->drawText(r.adjusted(39,0,-2,0),Qt::AlignVCenter,record.assignee);
+            p->setPen(AppTheme::pen(*p, Qt::NoPen)); p->setBrush(AppTheme::brush(*p, avatar[row%6])); p->drawEllipse(QRectF(r.left()+7,r.center().y()-13,26,26));
+            p->setPen(AppTheme::pen(*p, QColor("#28517c"))); p->drawText(QRectF(r.left()+7,r.center().y()-13,26,26),Qt::AlignCenter,initials);
+            p->setPen(AppTheme::pen(*p, navy)); p->drawText(r.adjusted(39,0,-2,0),Qt::AlignVCenter,record.assignee);
         } else if(col==6) {
             p->save(); p->translate(r.left()+7,r.center().y()-10); symbol(*p,"calendar",muted); p->restore();
-            p->setPen(muted); p->drawText(r.adjusted(34,3,-2,-r.height()/2+1),Qt::AlignVCenter,record.date);
+            p->setPen(AppTheme::pen(*p, muted)); p->drawText(r.adjusted(34,3,-2,-r.height()/2+1),Qt::AlignVCenter,record.date);
             p->drawText(r.adjusted(34,r.height()/2-1,-2,-3),Qt::AlignVCenter,record.startTime+" - "+record.endTime);
         } else if(col==7 || col==8) {
             const QString value=col==7?record.priority:record.status; QColor bg,fg;
@@ -574,12 +594,12 @@ public:
             QRectF badge(r.left()+4,r.center().y()-13,r.width()-8,26);
             if(col==8) {
                 QColor halo=fg; halo.setAlpha(qRound(7+40*pulseLevel));
-                p->setPen(Qt::NoPen); p->setBrush(halo);
+                p->setPen(AppTheme::pen(*p, Qt::NoPen)); p->setBrush(AppTheme::brush(*p, halo));
                 p->drawRoundedRect(badge.adjusted(-2,-2,2,2),15,15);
             }
-            p->setPen(Qt::NoPen); p->setBrush(bg); p->drawRoundedRect(badge,13,13); p->setPen(fg); p->drawText(badge,Qt::AlignCenter,value);
+            p->setPen(AppTheme::pen(*p, Qt::NoPen)); p->setBrush(AppTheme::brush(*p, bg)); p->drawRoundedRect(badge,13,13); p->setPen(AppTheme::pen(*p, fg)); p->drawText(badge,Qt::AlignCenter,value);
         } else {
-            p->setPen(Qt::NoPen); p->setBrush(navy); for(int i=-1;i<=1;++i) p->drawEllipse(QPointF(r.center().x()+i*7,r.center().y()),1.5,1.5);
+            p->setPen(AppTheme::pen(*p, Qt::NoPen)); p->setBrush(AppTheme::brush(*p, navy)); for(int i=-1;i<=1;++i) p->drawEllipse(QPointF(r.center().x()+i*7,r.center().y()),1.5,1.5);
         }
         p->restore();
     }
@@ -590,8 +610,8 @@ public:
     explicit ServiceHeader(QWidget *parent):QHeaderView(Qt::Horizontal,parent) {}
 protected:
     void paintSection(QPainter *p,const QRect &rect,int section) const override {
-        QHeaderView::paintSection(p,rect,section); p->save(); p->setRenderHint(QPainter::Antialiasing); p->setPen(QPen(QColor("#8aa6d2"),1.2));
-        if(section==0) { p->setBrush(Qt::white); p->drawRoundedRect(QRectF(rect.center().x()-8,rect.center().y()-8,16,16),3,3); }
+        QHeaderView::paintSection(p,rect,section); p->save(); p->setRenderHint(QPainter::Antialiasing); p->setPen(AppTheme::pen(*p, QPen(QColor("#8aa6d2"),1.2)));
+        if(section==0) { p->setBrush(AppTheme::brush(*p, Qt::white)); p->drawRoundedRect(QRectF(rect.center().x()-8,rect.center().y()-8,16,16),3,3); }
         else if(section>0 && section<9) { int x=rect.left()+fontMetrics().horizontalAdvance(model()->headerData(section,Qt::Horizontal).toString())+20; int y=rect.center().y(); p->drawLine(x,y-2,x+3,y-5); p->drawLine(x+3,y-5,x+6,y-2); p->drawLine(x,y+2,x+3,y+5); p->drawLine(x+3,y+5,x+6,y+2); }
         p->restore();
     }
@@ -792,18 +812,18 @@ protected:
         for(int i=0;i<items.size();++i) {
             const auto &item=items[i];
             const int y=top+i*rowH, cy=y+rowH/2;
-            p.setFont(labelFont); p.setPen(QColor("#17294f"));
+            p.setFont(labelFont); p.setPen(AppTheme::pen(p, QColor("#17294f")));
             p.drawText(QRect(0,y,labelW,rowH),Qt::AlignLeft|Qt::AlignVCenter,item.label);
             const QRectF track(trackX,cy-barH/2.0,trackW,barH);
-            p.setPen(Qt::NoPen); p.setBrush(QColor("#edf3fb")); p.drawRoundedRect(track,barH/2.0,barH/2.0);
+            p.setPen(AppTheme::pen(p, Qt::NoPen)); p.setBrush(AppTheme::brush(p, QColor("#edf3fb"))); p.drawRoundedRect(track,barH/2.0,barH/2.0);
             if(item.value>0) {
                 const qreal w=qMax<qreal>(barH,trackW*qreal(item.value)/maximum);
-                p.setBrush(item.color); p.drawRoundedRect(QRectF(trackX,track.top(),w,barH),barH/2.0,barH/2.0);
+                p.setBrush(AppTheme::brush(p, item.color)); p.drawRoundedRect(QRectF(trackX,track.top(),w,barH),barH/2.0,barH/2.0);
             }
             const int pct=total>0?qRound(100.0*item.value/total):0;
-            p.setFont(valueFont); p.setPen(QColor("#0d2250"));
+            p.setFont(valueFont); p.setPen(AppTheme::pen(p, QColor("#0d2250")));
             p.drawText(QRect(trackX+trackW+gap,y,32,rowH),Qt::AlignRight|Qt::AlignVCenter,QString::number(item.value));
-            p.setFont(percentFont); p.setPen(QColor("#6a7fa3"));
+            p.setFont(percentFont); p.setPen(AppTheme::pen(p, QColor("#6a7fa3")));
             p.drawText(QRect(trackX+trackW+gap+34,y,valueW-34,rowH),Qt::AlignRight|Qt::AlignVCenter,QString("%1%").arg(pct));
         }
     }

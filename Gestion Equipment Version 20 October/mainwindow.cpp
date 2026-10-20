@@ -1,3 +1,4 @@
+#include "apptheme.h"
 #include "mainwindow.h"
 #include <QtWidgets>
 #include <QJsonDocument>
@@ -83,8 +84,8 @@ QWidget *twoLines(const QString &a, const QString &b, bool bold) {
 QPixmap avatar(const QString &name, int s) {
     QPixmap pm(s, s); pm.fill(Qt::transparent);
     QPainter p(&pm); p.setRenderHint(QPainter::Antialiasing);
-    p.setBrush(QColor::fromHsv(int(qHash(name) % 360), 120, 200)); p.setPen(Qt::NoPen);
-    p.drawEllipse(0, 0, s, s); p.setPen(Qt::white);
+    p.setBrush(AppTheme::brush(p, QColor::fromHsv(int(qHash(name) % 360), 120, 200))); p.setPen(AppTheme::pen(p, Qt::NoPen));
+    p.drawEllipse(0, 0, s, s); p.setPen(AppTheme::pen(p, Qt::white));
     QFont f = p.font(); f.setBold(true); f.setPixelSize(qMax(8, s / 3)); p.setFont(f);
     QString ini; for (const QString &w : name.split(' ', Qt::SkipEmptyParts)) ini += w.at(0).toUpper();
     p.drawText(pm.rect(), Qt::AlignCenter, ini.left(2));
@@ -100,7 +101,7 @@ protected:
         QLinearGradient gradient(0, 0, 0, height());
         gradient.setColorAt(0, QColor("#f8faff"));
         gradient.setColorAt(1, QColor("#eef3fa"));
-        p.fillRect(rect(), gradient);
+        p.fillRect(rect(),AppTheme::brush(p,  gradient));
     }
 };
 
@@ -116,14 +117,14 @@ protected:
             const QRect source((scaled.width() - width()) / 2, (scaled.height() - height()) / 2, width(), height());
             p.drawPixmap(rect(), scaled, source);
         } else {
-            p.fillRect(rect(), QColor("#071a31"));
+            p.fillRect(rect(),AppTheme::brush(p,  QColor("#071a31")));
         }
         QLinearGradient shade(0, 0, 0, height());
         shade.setColorAt(0.0, QColor(5, 20, 39, 238));
         shade.setColorAt(0.42, QColor(5, 20, 39, 205));
         shade.setColorAt(0.72, QColor(5, 20, 39, 120));
         shade.setColorAt(1.0, QColor(5, 20, 39, 78));
-        p.fillRect(rect(), shade);
+        p.fillRect(rect(),AppTheme::brush(p,  shade));
     }
 private:
     QPixmap mt;
@@ -138,9 +139,9 @@ public:
     }
 protected:
     void paintEvent(QPaintEvent *) override {
-        QPainter p(this); p.setRenderHint(QPainter::Antialiasing); p.fillRect(rect(), Qt::white);
+        QPainter p(this); p.setRenderHint(QPainter::Antialiasing); p.fillRect(rect(),AppTheme::brush(p,  Qt::white));
         QFont f = font(); f.setBold(true); f.setPointSize(11); p.setFont(f);
-        p.setPen(QColor("#0b1437")); p.drawText(14, 26, title);
+        p.setPen(AppTheme::pen(p, QColor("#0b1437"))); p.drawText(14, 26, title);
         f.setBold(false); f.setPointSize(9); p.setFont(f);
         double mx = 1; for (const auto &x : d) mx = qMax(mx, x.second);
         int n = qMax(1, int(d.size())), top = 60, bottom = 34, left = 16;
@@ -148,8 +149,8 @@ protected:
         for (int i = 0; i < d.size(); ++i) {
             int bh = int(h * d[i].second / mx);
             QRect r(left + i * slot + slot / 6, top + h - bh, slot * 2 / 3, bh);
-            p.setPen(Qt::NoPen); p.setBrush(col[i % col.size()]); p.drawRoundedRect(r, 6, 6);
-            p.setPen(QColor("#374151"));
+            p.setPen(AppTheme::pen(p, Qt::NoPen)); p.setBrush(AppTheme::brush(p, col[i % col.size()])); p.drawRoundedRect(r, 6, 6);
+            p.setPen(AppTheme::pen(p, QColor("#374151")));
             p.drawText(QRect(left + i * slot, top + h - bh - 20, slot, 18), Qt::AlignCenter,
                        QString::number(d[i].second, 'f', unit.isEmpty() ? 0 : 1) + unit);
             p.drawText(QRect(left + i * slot, top + h + 6, slot, 20), Qt::AlignCenter, d[i].first);

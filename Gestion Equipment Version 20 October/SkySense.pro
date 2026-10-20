@@ -42,3 +42,8 @@ RESOURCES += resources.qrc
 
 
 contains(CONFIG, skysense_tests): DEFINES += SKYSENSE_UI_TESTS
+
+HEADERS += loginatmosphere.h
+
+SOURCES += apptheme.cpp
+HEADERS += apptheme.h

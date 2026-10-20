@@ -1,3 +1,4 @@
+#include "apptheme.h"
 #include "skysensewindow.h"
 #include "appsession.h"
 #include "connection.h"
@@ -17,6 +18,7 @@
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QDir>
+#include <QFileInfo>
 #include <QMenu>
 #include <QMessageBox>
 #include <QInputDialog>
@@ -75,6 +77,12 @@ int main(int argc, char *argv[])
     app.setApplicationName("SkySense");
     app.setOrganizationName("CoreVision");
     app.setStyle("Fusion");
+#ifdef SKYSENSE_UI_TESTS
+    AppTheme::instance()->initialize(false);
+    AppTheme::instance()->setDark(app.arguments().contains("--dark-theme"));
+#else
+    AppTheme::instance()->initialize();
+#endif
     tryOracleConnection(app);
     SkySenseWindow window;
     const QRect available=app.primaryScreen()->availableGeometry();
@@ -108,22 +116,57 @@ int main(int argc, char *argv[])
             }
         });
     }
+    if(app.arguments().contains("--verify-theme")) {
+        QTimer::singleShot(1200,&window,[&window,&app]{
+            auto *a=window.findChild<QAbstractButton *>("loginThemeSwitch");
+            auto *b=window.findChild<QAbstractButton *>("workspaceThemeSwitch");
+            auto *form=window.findChild<QWidget *>("loginForm");
+            if(!a || !b || !form){app.exit(90);return;}
+            AppTheme::instance()->setDark(false);
+            const QString original=form->styleSheet();
+            a->click();
+            if(!AppTheme::dark() || !a->isChecked() || !b->isChecked()){app.exit(91);return;}
+            QDialog dialog(&window);QLabel label("New dialog",&dialog);
+            dialog.setStyleSheet("QDialog{background:white;color:#111111;}");dialog.show();
+            app.processEvents();
+            if(!dialog.styleSheet().contains("#18283e")){app.exit(92);return;}
+            b->click();app.processEvents();
+            if(AppTheme::dark() || a->isChecked() || b->isChecked() || form->styleSheet()!=original || !dialog.styleSheet().contains("background:white")){app.exit(93);return;}
+            dialog.close();app.exit(0);
+        });
+    }
     const bool captureLaptop = app.arguments().contains("--capture-laptop");
+    const bool captureLogin = app.arguments().contains("--capture-login");
+    const bool captureLoginCompact = app.arguments().contains("--capture-login-compact");
     const bool captureGlow = app.arguments().contains("--capture-glow");
+    const bool captureEquipmentStatistics = app.arguments().contains("--capture-equipment-statistics");
     const bool verifyHeader = app.arguments().contains("--verify-header");
     const bool verifyAccess = app.arguments().contains("--verify-access");
     const bool verifyEmptyActions = app.arguments().contains("--verify-empty-actions");
 #else
     const bool captureLaptop = false;
+    const bool captureLogin = false;
+    const bool captureLoginCompact = false;
     const bool captureGlow = false;
+    const bool captureEquipmentStatistics = false;
     const bool verifyHeader = false;
     const bool verifyAccess = false;
     const bool verifyEmptyActions = false;
 #endif
-    if (app.arguments().contains("--capture-pages") || captureLaptop || captureGlow || verifyHeader || verifyAccess || verifyEmptyActions) {
+    if (captureLogin || captureLoginCompact) {
+        intro->stop();
+        window.resize(captureLoginCompact ? QSize(1100, 700) : QSize(1490, 850));
+        window.setWindowOpacity(1.0);
+        QTimer::singleShot(1100, &window, [&window, &app, captureLoginCompact] {
+            const QString fileName = captureLoginCompact ? "/login_compact.png" : "/login_premium.png";
+            if (!window.grab().save(QDir::currentPath() + fileName)) { app.exit(83); return; }
+            app.quit();
+        });
+    }
+    if (app.arguments().contains("--capture-pages") || captureLaptop || captureGlow || captureEquipmentStatistics || verifyHeader || verifyAccess || verifyEmptyActions) {
         window.resize(captureLaptop ? QSize(1440, 900) : QSize(1920, 1080));
         window.setWindowOpacity(1.0);
-        QTimer::singleShot(1100, &window, [&window, &app, captureLaptop, captureGlow, verifyHeader, verifyAccess, verifyEmptyActions] {
+        QTimer::singleShot(1100, &window, [&window, &app, captureLaptop, captureGlow, captureEquipmentStatistics, verifyHeader, verifyAccess, verifyEmptyActions] {
             auto *email = window.findChild<QLineEdit *>("emailInput");
             auto *password = window.findChild<QLineEdit *>("passwordInput");
             auto *signIn = window.findChild<QPushButton *>("signInButton");
@@ -134,6 +177,23 @@ int main(int argc, char *argv[])
             if (captureLaptop) window.resize(1440, 900);
             auto *sidebar = window.findChild<QWidget *>("servicesSidebar");
             if (!sidebar) { app.exit(3); return; }
+            if (captureEquipmentStatistics) {
+                for (auto *button : sidebar->findChildren<QPushButton *>())
+                    if (button->property("nav").toBool() && button->text() == "Equipment") { button->click(); break; }
+                auto *equipmentHost = window.findChild<QWidget *>("moduleHost_Equipment");
+                auto *equipment = equipmentHost ? qobject_cast<QWidget *>(equipmentHost->property("protectedModuleWidget").value<QObject *>()) : nullptr;
+                auto *statisticsButton = equipment ? equipment->findChild<QPushButton *>("equipmentStatisticsButton") : nullptr;
+                if (!statisticsButton) { app.exit(80); return; }
+                QTimer::singleShot(700, &window, [&app] {
+                    auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+                    if (!dialog || !dialog->grab().save(QDir::currentPath() + "/equipment_statistics.png")) { app.exit(81); return; }
+                    dialog->accept();
+                });
+                statisticsButton->click();
+                if (!QFileInfo::exists(QDir::currentPath() + "/equipment_statistics.png")) { app.exit(82); return; }
+                app.quit();
+                return;
+            }
             if (verifyEmptyActions) {
                 auto *moduleStack = window.findChild<QStackedWidget *>("workspaceModulePages");
                 auto selectModule = [sidebar](const QString &name) {

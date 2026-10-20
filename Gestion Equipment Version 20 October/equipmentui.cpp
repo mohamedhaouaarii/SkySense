@@ -1,3 +1,4 @@
+#include "apptheme.h"
 #include "equipmentui.h"
 #include "equipmentdata.h"
 #include "connection.h"
@@ -14,6 +15,7 @@
 #include <QComboBox>
 #include <QDateTime>
 #include <QDateEdit>
+#include <QEnterEvent>
 #include <QCalendarWidget>
 #include <QSpinBox>
 #include <QLocale>
@@ -27,15 +29,19 @@
 #include <QDoubleSpinBox>
 #include <QFile>
 #include <QFrame>
+#include <QGraphicsDropShadowEffect>
 #include <QGridLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QLinearGradient>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMessageBox>
 #include <QMap>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPropertyAnimation>
+#include <QVariantAnimation>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QScrollArea>
@@ -52,10 +58,11 @@
 
 namespace {
 const QColor navy("#091b40"), muted("#5d77ad"), blue("#0785ff");
+qreal equipmentStatusPulse=0.0;
 void symbol(QPainter &p, const QString &name, QColor color)
 {
     p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)); p.setBrush(Qt::NoBrush);
+    p.setPen(AppTheme::pen(p, QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin))); p.setBrush(AppTheme::brush(p, Qt::NoBrush));
     QPainterPath path;
     if (name == "equipment") {
         for (int y : {4, 14}) { p.drawRoundedRect(QRectF(3,y,18,6),1,1); p.drawPoint(6,y+3); p.drawLine(16,y+3,18,y+3); }
@@ -128,14 +135,78 @@ QLabel *text(const QString &value, const char *role="body")
     auto *label=new QLabel(value); label->setProperty("role",role); label->setWordWrap(true);
     label->setSizePolicy(QSizePolicy::Preferred,QSizePolicy::Preferred); return label;
 }
+class PremiumButton final : public QPushButton {
+    QGraphicsDropShadowEffect *shadow = nullptr;
+    QPropertyAnimation *blurAnimation = nullptr;
+    QPropertyAnimation *offsetAnimation = nullptr;
+
+    void animateShadow(qreal blur, const QPointF &offset)
+    {
+        blurAnimation->stop();
+        blurAnimation->setStartValue(shadow->blurRadius());
+        blurAnimation->setEndValue(blur);
+        blurAnimation->start();
+        offsetAnimation->stop();
+        offsetAnimation->setStartValue(shadow->offset());
+        offsetAnimation->setEndValue(offset);
+        offsetAnimation->start();
+    }
+
+public:
+    explicit PremiumButton(const QString &title, QWidget *parent = nullptr)
+        : QPushButton(title, parent)
+    {
+        shadow = new QGraphicsDropShadowEffect(this);
+        shadow->setBlurRadius(12);
+        shadow->setOffset(0, 3);
+        shadow->setColor(QColor(9, 27, 64, 48));
+        setGraphicsEffect(shadow);
+        blurAnimation = new QPropertyAnimation(shadow, "blurRadius", this);
+        blurAnimation->setDuration(150);
+        blurAnimation->setEasingCurve(QEasingCurve::OutCubic);
+        offsetAnimation = new QPropertyAnimation(shadow, "offset", this);
+        offsetAnimation->setDuration(150);
+        offsetAnimation->setEasingCurve(QEasingCurve::OutCubic);
+    }
+
+protected:
+    void enterEvent(QEnterEvent *event) override
+    {
+        QPushButton::enterEvent(event);
+        animateShadow(20, QPointF(0, 6));
+    }
+    void leaveEvent(QEvent *event) override
+    {
+        QPushButton::leaveEvent(event);
+        animateShadow(12, QPointF(0, 3));
+    }
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        QPushButton::mousePressEvent(event);
+        animateShadow(7, QPointF(0, 1));
+    }
+    void mouseReleaseEvent(QMouseEvent *event) override
+    {
+        QPushButton::mouseReleaseEvent(event);
+        const bool hovered = rect().contains(event->pos());
+        animateShadow(hovered ? 20 : 12, QPointF(0, hovered ? 6 : 3));
+    }
+};
+
 QPushButton *button(const QString &title, const QString &glyph, bool primary=false)
 {
-    auto *b=new QPushButton(title); b->setIcon(icon(glyph,primary?Qt::white:navy)); b->setIconSize(QSize(20,20));
+    auto *b=new PremiumButton(title); b->setIcon(icon(glyph,primary?Qt::white:navy)); b->setIconSize(QSize(20,20));
     b->setProperty("primary",primary); b->setCursor(Qt::PointingHandCursor); b->setMinimumHeight(42); return b;
 }
 QFrame *card(const char *role="card")
 {
-    auto *f=new QFrame; f->setProperty("role",role); return f;
+    auto *f=new QFrame; f->setProperty("role",role);
+    auto *shadow = new QGraphicsDropShadowEffect(f);
+    shadow->setBlurRadius(18);
+    shadow->setOffset(0, 5);
+    shadow->setColor(QColor(18, 48, 88, 24));
+    f->setGraphicsEffect(shadow);
+    return f;
 }
 QLineEdit *search(const QString &placeholder)
 {
@@ -155,37 +226,79 @@ QComboBox *selector(const QString &title, bool small=false)
     combo->setFixedHeight(small?25:40); combo->setMinimumWidth(small?108:124); return combo;
 }
 class Glyph final : public QWidget {
-    QString name; QColor color; bool bubble; qreal pulseLevel=1.0;
+    QString name; QColor color; bool bubble; bool animated=false;
+    QTimer pulseTimer; qreal pulse=.5; int pulseTick=0; qreal phase=0;
 public:
-    Glyph(QString n,QColor c=blue,int size=28,bool circle=false):name(n),color(c),bubble(circle) { setFixedSize(size,size); }
-    void setPulseLevel(qreal value) { pulseLevel=value; update(); }
+    Glyph(QString n,QColor c=blue,int size=28,bool circle=false,bool animate=false)
+        :name(n),color(c),bubble(circle),animated(animate) {
+        setFixedSize(size,size);
+        if(animated) {
+            static int sequence=0;
+            phase=(sequence++%4)*1.57079632679;
+            pulseTimer.setInterval(34);
+            QObject::connect(&pulseTimer,&QTimer::timeout,this,[this]{
+                pulse=.5+.5*qSin(pulseTick*.14+phase);
+                ++pulseTick;
+                update();
+            });
+        }
+    }
 protected:
+    void showEvent(QShowEvent *event) override { QWidget::showEvent(event); if(animated)pulseTimer.start(); }
+    void hideEvent(QHideEvent *event) override { pulseTimer.stop(); QWidget::hideEvent(event); }
     void paintEvent(QPaintEvent *) override {
         QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
-        const bool liveStatus=name=="wifi" || name=="offline";
-        if(liveStatus) {
-            QColor glow=color; glow.setAlpha(qRound(15+65*pulseLevel));
-            p.setPen(Qt::NoPen); p.setBrush(glow);
+        if(bubble) {
+            QLinearGradient surface(0, 0, width(), height());
+            surface.setColorAt(0, color.lighter(165));
+            surface.setColorAt(0.55, color.lighter(125));
+            surface.setColorAt(1, color.darker(108));
+            p.setPen(AppTheme::pen(p, QPen(QColor(255,255,255,205), 1)));
+            p.setBrush(AppTheme::brush(p, surface));
             p.drawEllipse(rect().adjusted(1,1,-1,-1));
+            p.setPen(AppTheme::pen(p, QPen(QColor(255,255,255,95), 1)));
+            p.drawArc(rect().adjusted(4,3,-4,-4), 25*16, 130*16);
         }
-        if(bubble) { QColor bg=color; bg.setAlpha(22); p.setPen(Qt::NoPen); p.setBrush(bg); p.drawEllipse(rect()); }
-        if(liveStatus) p.setOpacity(0.55+0.45*pulseLevel);
-        qreal margin=bubble?width()*.25:2; p.translate(margin,margin); p.scale((width()-2*margin)/24.0,(height()-2*margin)/24.0); symbol(p,name,color);
+        qreal margin=bubble?width()*.25:2;
+        p.translate(margin,margin);
+        p.scale((width()-2*margin)/24.0,(height()-2*margin)/24.0);
+        QColor ink=color;
+        if(animated) {
+            ink=AppTheme::dark()?color.lighter(100+qRound(28*pulse)):color.darker(118-qRound(18*pulse));
+            p.setOpacity(.42+.58*pulse);
+        }
+        symbol(p,name,ink);
     }
 };
 class MiniBars final : public QWidget {
     QColor color;
-public: explicit MiniBars(QColor c):color(c) { setFixedSize(30,42); }
-protected: void paintEvent(QPaintEvent *) override { QPainter p(this); p.setRenderHint(QPainter::Antialiasing); color.setAlpha(65); p.setBrush(color); p.setPen(Qt::NoPen); for(int i=0;i<4;++i) p.drawRoundedRect(QRectF(i*width()/4.0,32-i*9,qMin(4.0,width()/6.0),10+i*9),2,2); }
+    qreal currentProgress=0.0;
+public:
+    explicit MiniBars(QColor c):color(c) { setFixedSize(58,9); setToolTip("Share of total equipment"); }
+    qreal progress() const { return currentProgress; }
+    void setProgress(qreal value) { currentProgress=qBound(0.0,value,1.0); update(); }
+protected:
+    void paintEvent(QPaintEvent *) override {
+        QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
+        const QRectF track=QRectF(rect()).adjusted(0.5,1.5,-0.5,-1.5);
+        p.setPen(AppTheme::pen(p, Qt::NoPen)); p.setBrush(AppTheme::brush(p, QColor(color.red(),color.green(),color.blue(),28))); p.drawRoundedRect(track,3.5,3.5);
+        if(currentProgress<=0.0) return;
+        QRectF fill=track; fill.setWidth(qMax(7.0,track.width()*currentProgress));
+        QLinearGradient gradient(fill.topLeft(),fill.topRight()); gradient.setColorAt(0,color.lighter(125)); gradient.setColorAt(1,color);
+        p.setBrush(AppTheme::brush(p, gradient)); p.drawRoundedRect(fill,3.5,3.5);
+    }
 };
 QWidget *metricCard(const QString &title,const QString &value,const QString &total,const QString &trend,const QString &glyph,const QColor &accent,const char *tone)
 {
     auto *f=card("metric"); f->setProperty("tone",tone); f->setMinimumHeight(118);
     auto *row=new QHBoxLayout(f); row->setContentsMargins(14,16,12,14); row->setSpacing(12);
-    row->addWidget(new Glyph(glyph,accent,48,true),0,Qt::AlignTop);
+    row->addWidget(new Glyph(glyph,accent,48,true,true),0,Qt::AlignTop);
     auto *copy=new QVBoxLayout; copy->setSpacing(4); copy->addWidget(text(title,"metricTitle"));
     auto *numbers=new QHBoxLayout; numbers->setSpacing(6); auto *valueLabel=text(value,"number"); valueLabel->setObjectName("metricValue"); auto *totalLabel=text(total,"muted"); totalLabel->setObjectName("metricTotal"); numbers->addWidget(valueLabel); numbers->addWidget(totalLabel,1,Qt::AlignBottom); copy->addLayout(numbers);
-    auto *change=text(trend,"trend"); change->setProperty("tone",tone); copy->addWidget(change); row->addLayout(copy,1); row->addWidget(new MiniBars(accent),0,Qt::AlignVCenter); return f;
+    auto *change=text(trend,"trend"); change->setProperty("tone",tone); copy->addWidget(change); row->addLayout(copy,1);
+    auto *insight=new QVBoxLayout; insight->setSpacing(5); insight->setAlignment(Qt::AlignCenter);
+    auto *share=text("—%","share"); share->setObjectName("metricShare"); share->setAlignment(Qt::AlignRight|Qt::AlignVCenter); insight->addWidget(share);
+    auto *meter=new MiniBars(accent); meter->setObjectName("metricMeter"); insight->addWidget(meter); row->addLayout(insight,0); return f;
 }
 const QStringList types{"Weather Station","Anemometer","Rain Gauge","Pyranometer","Barometer","Sky Camera"};
 const QStringList typeIcons{"thermometer","anemometer","drop","sun","gauge","camera"};
@@ -442,21 +555,19 @@ bool showAddEquipmentDialog(QWidget *parent, EquipmentRecord *record, bool editi
 }
 
 class EquipmentDelegate final : public QStyledItemDelegate {
-    qreal pulseLevel=1.0;
 public:
     using QStyledItemDelegate::QStyledItemDelegate;
-    void setPulseLevel(qreal value) { pulseLevel=value; }
     void paint(QPainter *p,const QStyleOptionViewItem &o,const QModelIndex &index) const override {
         p->save(); p->setRenderHint(QPainter::Antialiasing); QRect r=o.rect; int col=index.column();
-        p->fillRect(r,o.state.testFlag(QStyle::State_Selected)?QColor("#e5f4ff"):Qt::white); p->setPen(QColor("#e5eef9")); p->drawLine(r.bottomLeft(),r.bottomRight());
-        QFont font("Segoe UI"); font.setPixelSize(13); p->setFont(font); p->setPen(navy);
+        p->fillRect(r,AppTheme::brush(*p, o.state.testFlag(QStyle::State_Selected)?QColor("#e5f4ff"):Qt::white)); p->setPen(AppTheme::pen(*p, QColor("#e5eef9"))); p->drawLine(r.bottomLeft(),r.bottomRight());
+        QFont font("Segoe UI"); font.setPixelSize(13); p->setFont(font); p->setPen(AppTheme::pen(*p, navy));
         EquipmentRecord data;
         const QString id=index.siblingAtColumn(1).data().toString();
         for(const auto &record:equipmentRecords) if(record.id==id) { data=record; break; }
         const bool selected=o.state.testFlag(QStyle::State_Selected);
         if(col==0) {
-            if(selected) p->fillRect(QRect(r.left(),r.top(),3,r.height()),blue);
-            QRectF box(r.center().x()-8,r.center().y()-8,16,16); p->setPen(QPen(selected?blue:QColor("#8ca7d3"),1.3)); p->setBrush(selected?blue:Qt::white); p->drawRoundedRect(box,3,3);
+            if(selected) p->fillRect(QRect(r.left(),r.top(),3,r.height()),AppTheme::brush(*p, blue));
+            QRectF box(r.center().x()-8,r.center().y()-8,16,16); p->setPen(AppTheme::pen(*p, QPen(selected?blue:QColor("#8ca7d3"),1.3))); p->setBrush(AppTheme::brush(*p, selected?blue:Qt::white)); p->drawRoundedRect(box,3,3);
             if(selected) { p->translate(box.topLeft()); p->scale(16.0/24,16.0/24); symbol(*p,"check",Qt::white); }
         } else if(col==1) { font.setBold(true); p->setFont(font); p->drawText(r.adjusted(10,0,-4,0),Qt::AlignVCenter,data.id);
         } else if(col==2) {
@@ -464,22 +575,30 @@ public:
             p->save(); p->translate(r.left()+8,r.center().y()-12); symbol(*p,typeIcons[typeIndex],typeIndex==3?QColor("#f5aa00"):blue); p->restore(); p->drawText(r.adjusted(44,0,-4,0),Qt::AlignVCenter,data.type);
         } else if(col==3) {
             font.setBold(true); p->setFont(font); p->drawText(r.adjusted(10,3,-4,-r.height()/2+2),Qt::AlignVCenter,data.station.section('\n',0,0));
-            font.setBold(false); p->setFont(font); p->setPen(muted); p->drawText(r.adjusted(10,r.height()/2-1,-4,-3),Qt::AlignVCenter,data.station.section('\n',1,1));
-        } else if(col==4) { p->setPen(muted); p->drawText(r.adjusted(10,0,0,0),Qt::AlignVCenter,data.unit);
+            font.setBold(false); p->setFont(font); p->setPen(AppTheme::pen(*p, muted)); p->drawText(r.adjusted(10,r.height()/2-1,-4,-3),Qt::AlignVCenter,data.station.section('\n',1,1));
+        } else if(col==4) { p->setPen(AppTheme::pen(*p, muted)); p->drawText(r.adjusted(10,0,0,0),Qt::AlignVCenter,data.unit);
         } else if(col==5) {
             const QColor dot=data.status=="Offline"?QColor("#ff304a"):data.status=="Maintenance"?QColor("#ffb000"):QColor("#00b66a");
-            QColor halo=dot; halo.setAlpha(qRound(20+85*pulseLevel));
-            p->setPen(Qt::NoPen); p->setBrush(halo); p->drawEllipse(QPointF(r.left()+14,r.center().y()),8,8);
-            p->setPen(Qt::NoPen); p->setBrush(dot); p->drawEllipse(QPointF(r.left()+14,r.center().y()),4.5,4.5);
-            p->setPen(muted); p->drawText(r.adjusted(30,0,0,0),Qt::AlignVCenter,QDateTime::fromString(data.updated,Qt::ISODate).toString("dd MMM yyyy HH:mm"));
+            QColor halo=dot; halo.setAlpha(qRound(9+21*equipmentStatusPulse)); p->setPen(AppTheme::pen(*p, Qt::NoPen)); p->setBrush(AppTheme::brush(*p, halo)); p->drawEllipse(QPointF(r.left()+14,r.center().y()),8,8);
+            p->setPen(AppTheme::pen(*p, Qt::NoPen)); p->setBrush(AppTheme::brush(*p, dot)); p->drawEllipse(QPointF(r.left()+14,r.center().y()),4.5,4.5);
+            p->setPen(AppTheme::pen(*p, muted)); p->drawText(r.adjusted(30,0,0,0),Qt::AlignVCenter,QDateTime::fromString(data.updated,Qt::ISODate).toString("dd MMM yyyy HH:mm"));
         } else if(col==6) {
             const bool offline=data.status=="Offline", maintenance=data.status=="Maintenance";
             QRectF badge(r.center().x()-53,r.center().y()-14,106,28);
             QColor halo=offline?QColor("#ef4444"):maintenance?QColor("#d97706"):QColor("#16a34a");
-            halo.setAlpha(qRound(6+36*pulseLevel));
-            p->setPen(Qt::NoPen); p->setBrush(halo); p->drawRoundedRect(badge.adjusted(-3,-3,3,3),17,17);
-            p->setBrush(offline?QColor("#fee2e2"):maintenance?QColor("#fef3c7"):QColor("#dcfce7")); p->drawRoundedRect(badge,14,14);
-            p->setPen(offline?QColor("#ef4444"):maintenance?QColor("#d97706"):QColor("#16a34a")); p->drawText(badge,Qt::AlignCenter,data.status);
+            halo.setAlpha(qRound(10+19*equipmentStatusPulse));
+            p->setPen(AppTheme::pen(*p, Qt::NoPen)); p->setBrush(AppTheme::brush(*p, halo)); p->drawRoundedRect(badge.adjusted(-2,-2,2,2),16,16);
+            if(AppTheme::dark()) {
+                const QColor ink=offline?QColor("#ffb7c1"):maintenance?QColor("#ffe09a"):QColor("#91f5c4");
+                const QColor surface=offline?QColor("#452332"):maintenance?QColor("#40351e"):QColor("#143e35");
+                QColor edge=ink;edge.setAlpha(110);
+                p->setPen(QPen(edge,1));p->setBrush(surface);p->drawRoundedRect(badge,14,14);
+                font.setWeight(QFont::DemiBold);p->setFont(font);p->setPen(ink);
+            } else {
+                p->setBrush(offline?QColor("#fee2e2"):maintenance?QColor("#fef3c7"):QColor("#dcfce7"));p->drawRoundedRect(badge,14,14);
+                p->setPen(offline?QColor("#b91c1c"):maintenance?QColor("#92400e"):QColor("#15803d"));
+            }
+            p->drawText(badge,Qt::AlignCenter,data.status);
         }
         p->restore();
     }
@@ -533,10 +652,6 @@ QVector<EquipmentRecord> chooseEquipmentForPdf(QWidget *parent,const QVector<Equ
 
 class EquipmentTable final : public QTableWidget {
 public:
-    void setPulseLevel(qreal value) {
-        static_cast<EquipmentDelegate *>(itemDelegate())->setPulseLevel(value);
-        viewport()->update();
-    }
     QString query, typeFilter, stationFilter, statusFilter;
     int sortColumn=1;
     bool ascending=true;
@@ -558,6 +673,11 @@ public:
         setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed); setMinimumWidth(0);
+        auto *statusAnimation=new QVariantAnimation(this); statusAnimation->setStartValue(0.0); statusAnimation->setKeyValueAt(.5,1.0);
+        statusAnimation->setEndValue(0.0); statusAnimation->setDuration(2400); statusAnimation->setLoopCount(-1);
+        statusAnimation->setEasingCurve(QEasingCurve::InOutSine);
+        QObject::connect(statusAnimation,&QVariantAnimation::valueChanged,this,[this](const QVariant &value){equipmentStatusPulse=value.toReal(); viewport()->update();});
+        statusAnimation->start();
         QObject::connect(horizontalHeader(),&QHeaderView::sectionClicked,this,[this](int column){
             if(column<1 || column>6) return;
             ascending=column==sortColumn?!ascending:true; sortColumn=column;
@@ -675,59 +795,166 @@ private:
 };
 
 class EquipmentBarChart final : public QWidget {
+    Q_PROPERTY(qreal reveal READ reveal WRITE setReveal)
     QString title;
     QVector<QPair<QString,int>> values;
     QColor accent;
+    qreal animationProgress=0.0;
 public:
     EquipmentBarChart(QString chartTitle, QVector<QPair<QString,int>> chartValues, QColor color, QWidget *parent=nullptr)
         : QWidget(parent), title(std::move(chartTitle)), values(std::move(chartValues)), accent(color) {
-        setMinimumHeight(205); setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Preferred);
+        setMinimumHeight(245); setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Preferred);
+        setAccessibleName(title);
+        QStringList description;
+        for (const auto &item : values) description << QString("%1: %2").arg(item.first).arg(item.second);
+        setAccessibleDescription(description.join("; "));
+        auto *animation=new QVariantAnimation(this); animation->setStartValue(0.0); animation->setEndValue(1.0);
+        animation->setDuration(650); animation->setEasingCurve(QEasingCurve::OutCubic);
+        QObject::connect(animation,&QVariantAnimation::valueChanged,this,[this](const QVariant &v){setReveal(v.toReal());});
+        QTimer::singleShot(90,this,[animation]{animation->start();});
     }
+    qreal reveal() const { return animationProgress; }
+    void setReveal(qreal value) { animationProgress=qBound(0.0,value,1.0); update(); }
 protected:
     void paintEvent(QPaintEvent *) override {
-        QPainter p(this); p.setRenderHint(QPainter::Antialiasing); p.fillRect(rect(), Qt::white);
-        QFont titleFont("Segoe UI",10,QFont::DemiBold); p.setFont(titleFont); p.setPen(navy);
-        p.drawText(QRectF(14,12,width()-28,22),Qt::AlignLeft|Qt::AlignVCenter,title);
-        const QRectF plot(38,48,width()-54,height()-82);
+        QPainter p(this); p.setRenderHint(QPainter::Antialiasing); p.fillRect(rect(),AppTheme::brush(p,  Qt::transparent));
+        QFont titleFont("Segoe UI",10,QFont::DemiBold); p.setFont(titleFont); p.setPen(AppTheme::pen(p, navy));
+        p.drawText(QRectF(16,13,width()-32,24),Qt::AlignLeft|Qt::AlignVCenter,title);
         if (values.isEmpty()) {
-            p.setPen(muted);
-            p.drawText(plot, Qt::AlignCenter, "No equipment data to display");
+            p.setPen(AppTheme::pen(p, muted)); p.drawText(rect().adjusted(12,46,-12,-12), Qt::AlignCenter, "No equipment data to display");
             return;
         }
         const int maximum=qMax(1, std::max_element(values.cbegin(),values.cend(),[](const auto &a,const auto &b){ return a.second<b.second; })->second);
         QFont small("Segoe UI"); small.setPixelSize(10); p.setFont(small);
-        for(int i=0;i<4;++i) { const qreal y=plot.bottom()-plot.height()*i/3; p.setPen(QColor("#e7effa")); p.drawLine(plot.left(),y,plot.right(),y); p.setPen(muted); p.drawText(QRectF(0,y-8,32,16),Qt::AlignRight,QString::number(qRound(maximum*i/3.0))); }
-        const qreal slot=plot.width()/qMax(1,values.size()); const qreal bar=qMin(42.0,slot*.54);
+        const qreal rowHeight=qMin(31.0,(height()-56.0)/qMax(1,values.size()));
+        const qreal labelWidth=qMin(150.0,qMax(92.0,width()*.34));
+        const qreal valueWidth=34.0, gap=10.0;
+        const qreal barLeft=labelWidth+gap, barWidth=qMax(20.0,width()-barLeft-valueWidth-22.0);
         for(int i=0;i<values.size();++i) {
-            const qreal h=plot.height()*values[i].second/maximum; const QRectF r(plot.left()+i*slot+(slot-bar)/2,plot.bottom()-h,bar,h);
-            QLinearGradient fill(r.topLeft(),r.bottomLeft()); fill.setColorAt(0,accent); QColor pale=accent; pale.setAlpha(110); fill.setColorAt(1,pale);
-            p.setPen(Qt::NoPen); p.setBrush(fill); p.drawRoundedRect(r,5,5);
-            p.setPen(navy); p.drawText(QRectF(r.left()-12,r.top()-20,r.width()+24,17),Qt::AlignCenter,QString::number(values[i].second));
-            p.setPen(muted); QString label=values[i].first; if(label.size()>13) label=label.left(12)+QString::fromUtf8("…");
-            p.drawText(QRectF(plot.left()+i*slot,plot.bottom()+7,slot,25),Qt::AlignHCenter|Qt::TextWordWrap,label);
+            const qreal y=47+i*rowHeight;
+            QString label=values[i].first;
+            QFontMetrics fm(small); while(label.size()>4 && fm.horizontalAdvance(label)>labelWidth-8) label.chop(1);
+            if(label!=values[i].first) label+=QString::fromUtf8("…");
+            p.setPen(AppTheme::pen(p, navy)); p.drawText(QRectF(16,y,labelWidth,rowHeight),Qt::AlignLeft|Qt::AlignVCenter,label);
+            QRectF track(barLeft,y+rowHeight*.31,barWidth, rowHeight*.38);
+            p.setPen(AppTheme::pen(p, Qt::NoPen)); p.setBrush(AppTheme::brush(p, QColor("#edf3fb"))); p.drawRoundedRect(track,5,5);
+            QRectF r(track.left(),track.top(),track.width()*values[i].second/maximum*animationProgress,track.height());
+            QLinearGradient fill(r.topLeft(),r.topRight()); fill.setColorAt(0,accent.lighter(112)); fill.setColorAt(1,accent);
+            p.setBrush(AppTheme::brush(p, fill)); p.drawRoundedRect(r,5,5);
+            p.setPen(AppTheme::pen(p, navy)); p.drawText(QRectF(track.right()+8,y,valueWidth,rowHeight),Qt::AlignRight|Qt::AlignVCenter,QString::number(values[i].second));
         }
+    }
+};
+
+class EquipmentStatusRing final : public QWidget {
+    Q_PROPERTY(qreal reveal READ reveal WRITE setReveal)
+    int online=0,offline=0,maintenance=0,total=0;
+    qreal animationProgress=0.0;
+public:
+    EquipmentStatusRing(int onlineCount,int offlineCount,int maintenanceCount,QWidget *parent=nullptr)
+        : QWidget(parent),online(onlineCount),offline(offlineCount),maintenance(maintenanceCount),
+          total(onlineCount+offlineCount+maintenanceCount) {
+        setMinimumSize(208,190); setMaximumWidth(250); setSizePolicy(QSizePolicy::Preferred,QSizePolicy::Expanding);
+        setAccessibleName("Equipment status distribution");
+        setAccessibleDescription(QString("%1 total: %2 online, %3 offline, %4 in maintenance")
+                                 .arg(total).arg(online).arg(offline).arg(maintenance));
+        auto *animation=new QVariantAnimation(this); animation->setStartValue(0.0); animation->setEndValue(1.0);
+        animation->setDuration(850); animation->setEasingCurve(QEasingCurve::OutCubic);
+        QObject::connect(animation,&QVariantAnimation::valueChanged,this,[this](const QVariant &v){setReveal(v.toReal());});
+        QTimer::singleShot(60,this,[animation]{animation->start();});
+    }
+    qreal reveal() const { return animationProgress; }
+    void setReveal(qreal value) { animationProgress=qBound(0.0,value,1.0); update(); }
+protected:
+    void paintEvent(QPaintEvent *) override {
+        QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
+        const qreal side=qMin(width()-20,height()-18), x=(width()-side)/2, y=(height()-side)/2;
+        const QRectF ring(x,y,side,side); const qreal penWidth=qMax(13.0,side*.12);
+        p.setPen(AppTheme::pen(p, QPen(QColor("#eaf0f8"),penWidth,Qt::SolidLine,Qt::RoundCap)));
+        p.drawArc(ring,90*16,-360*16);
+        if(total>0) {
+            const int counts[]{online,offline,maintenance};
+            const QColor colors[]{QColor("#18b878"),QColor("#ef5263"),QColor("#ed9b2f")};
+            int start=90*16; const int full=qRound(360.0*16*animationProgress);
+            int consumed=0;
+            for(int i=0;i<3;++i) {
+                const int span=(i==2?full-consumed:qRound(full*qreal(counts[i])/total)); consumed+=span;
+                if(span<=0) continue;
+                p.setPen(AppTheme::pen(p, QPen(colors[i],penWidth,Qt::SolidLine,Qt::RoundCap))); p.drawArc(ring,start,-span);
+                start-=span;
+            }
+        }
+        QFont numberFont("Segoe UI",22,QFont::Bold); p.setFont(numberFont); p.setPen(AppTheme::pen(p, QColor("#10284f")));
+        p.drawText(QRectF(ring.left(),ring.center().y()-22,ring.width(),32),Qt::AlignCenter,QString::number(total));
+        QFont caption("Segoe UI",9,QFont::DemiBold); p.setFont(caption); p.setPen(AppTheme::pen(p, QColor("#7183a0")));
+        p.drawText(QRectF(ring.left(),ring.center().y()+9,ring.width(),20),Qt::AlignCenter,"TOTAL DEVICES");
     }
 };
 
 void showEquipmentStatistics(QWidget *parent, const QVector<EquipmentRecord> &records)
 {
     QMap<QString,int> byStatus, byType, byStation;
+    int attention=0,assigned=0,stale=0;
     for(const auto &record:records) {
         ++byStatus[record.status]; ++byType[record.type];
         const QString station=record.station.section('\n',0,0).trimmed();
         ++byStation[station.isEmpty()?QStringLiteral("Reserve / unassigned"):station];
+        if(!station.isEmpty()) ++assigned;
+        const EquipmentAssessment assessment=assessEquipment(record);
+        if(assessment.needsReview) ++attention;
+        if(assessment.daysSinceUpdate>=EquipmentUpdateReviewDays || assessment.daysSinceUpdate<0) ++stale;
     }
     const auto pairs=[](const QMap<QString,int> &map) { QVector<QPair<QString,int>> result; for(auto it=map.cbegin();it!=map.cend();++it) result.append({it.key(),it.value()}); return result; };
-    QDialog dialog(parent); dialog.setObjectName("equipmentStatisticsDialog"); dialog.setWindowTitle("Equipment statistics"); dialog.setMinimumSize(760,570); dialog.resize(900,600);
-    auto *layout=new QVBoxLayout(&dialog); layout->setContentsMargins(26,24,26,22); layout->setSpacing(8);
-    layout->addWidget(text("Equipment statistics","dialogTitle"));
-    auto *intro=text("A visual overview of the inventory to identify equipment requiring attention and monitor distribution across stations.","subtitle"); intro->setWordWrap(true); layout->addWidget(intro);
-    auto *grid=new QGridLayout; grid->setHorizontalSpacing(14); grid->setVerticalSpacing(14);
-    grid->addWidget(new EquipmentBarChart("Equipment by status",pairs(byStatus),QColor("#0785ff")),0,0);
-    grid->addWidget(new EquipmentBarChart("Equipment by type",pairs(byType),QColor("#00a86b")),0,1);
-    grid->addWidget(new EquipmentBarChart("Equipment by station",pairs(byStation),QColor("#7948ff")),1,0,1,2);
-    layout->addLayout(grid,1);
-    auto *close=button("Close",""); close->setObjectName("closeEquipmentStatisticsButton"); layout->addWidget(close,0,Qt::AlignRight);
+    QVector<QPair<QString,int>> stationValues=pairs(byStation);
+    std::sort(stationValues.begin(),stationValues.end(),[](const auto &a,const auto &b){return a.second==b.second?a.first<b.first:a.second>b.second;});
+    if(stationValues.size()>6) {
+        int other=0; for(int i=5;i<stationValues.size();++i) other+=stationValues[i].second;
+        stationValues.resize(5); stationValues.append({QStringLiteral("Other stations"),other});
+    }
+    QDialog dialog(parent); dialog.setObjectName("equipmentStatisticsDialog"); dialog.setWindowTitle("Equipment insights | SkySense"); dialog.setMinimumSize(820,650); dialog.resize(980,720);
+    auto *layout=new QVBoxLayout(&dialog); layout->setContentsMargins(26,22,26,22); layout->setSpacing(12);
+    auto *heading=new QHBoxLayout; heading->addWidget(new Glyph("chart",blue,42,true));
+    auto *headingCopy=new QVBoxLayout; headingCopy->setSpacing(2);
+    headingCopy->addWidget(text("Equipment Insights","dialogTitle"));
+    auto *intro=text("A live operational snapshot from the equipment records currently loaded.","subtitle"); intro->setWordWrap(true); headingCopy->addWidget(intro);
+    heading->addLayout(headingCopy,1); layout->addLayout(heading);
+
+    auto *hero=card("detail"); hero->setObjectName("equipmentInsightsHero");
+    auto *heroLayout=new QHBoxLayout(hero); heroLayout->setContentsMargins(18,14,18,14); heroLayout->setSpacing(22);
+    heroLayout->addWidget(new EquipmentStatusRing(byStatus.value("Online"),byStatus.value("Offline"),byStatus.value("Maintenance")),0,Qt::AlignVCenter);
+    auto *legend=new QVBoxLayout; legend->setSpacing(10);
+    legend->addWidget(text("Status distribution","detailTitle"));
+    const QStringList statusNames{"Online","Offline","Maintenance"};
+    const QColor statusColors[]{QColor("#18b878"),QColor("#ef5263"),QColor("#ed9b2f")};
+    for(int i=0;i<statusNames.size();++i) {
+        auto *row=new QHBoxLayout; row->setSpacing(8);
+        auto *dot=new QLabel; dot->setFixedSize(10,10); dot->setStyleSheet(QString("background:%1;border-radius:5px;").arg(statusColors[i].name()));
+        row->addWidget(dot); row->addWidget(text(statusNames[i],"body"),1);
+        const int count=byStatus.value(statusNames[i]);
+        auto *value=text(QString("%1  ·  %2%").arg(count).arg(records.isEmpty()?0:qRound(100.0*count/records.size())),"detailTitle");
+        value->setAlignment(Qt::AlignRight|Qt::AlignVCenter); row->addWidget(value); legend->addLayout(row);
+    }
+    legend->addStretch();
+    auto *statusSummary=text(records.isEmpty()?"Add equipment to start monitoring operational status."
+        :QString("%1 of %2 devices need a review based on status or update freshness.").arg(attention).arg(records.size()),"smallMuted");
+    statusSummary->setWordWrap(true); legend->addWidget(statusSummary); heroLayout->addLayout(legend,1);
+    auto *divider=new QFrame; divider->setFrameShape(QFrame::VLine); divider->setStyleSheet("color:#e5edf7;"); heroLayout->addWidget(divider);
+    auto *insights=new QVBoxLayout; insights->setSpacing(7); insights->addWidget(text("Action overview","detailTitle"));
+    const QString freshnessLine=QString("%1 need an update review").arg(stale);
+    const QString assignmentLine=QString("%1 assigned  ·  %2 reserve").arg(assigned).arg(qMax(0,records.size()-assigned));
+    for(const auto &item:QVector<QPair<QString,QString>>{{"Review queue",QString("%1 device(s)").arg(attention)},
+            {"Update freshness",freshnessLine},{"Station coverage",assignmentLine}}) {
+        auto *tile=new QFrame; tile->setProperty("role","insightTile"); auto *tileLayout=new QVBoxLayout(tile); tileLayout->setContentsMargins(10,6,10,6); tileLayout->setSpacing(1);
+        tileLayout->addWidget(text(item.first,"smallMuted")); tileLayout->addWidget(text(item.second,"detailTitle")); insights->addWidget(tile);
+    }
+    insights->addStretch(); heroLayout->addLayout(insights,1); layout->addWidget(hero);
+
+    auto *charts=new QGridLayout; charts->setHorizontalSpacing(12); charts->setVerticalSpacing(12);
+    auto *byTypeCard=card("detail"); auto *typeLayout=new QVBoxLayout(byTypeCard); typeLayout->setContentsMargins(12,10,12,12); typeLayout->addWidget(new EquipmentBarChart("Equipment by type",pairs(byType),QColor("#287bea")));
+    auto *byStationCard=card("detail"); auto *stationLayout=new QVBoxLayout(byStationCard); stationLayout->setContentsMargins(12,10,12,12); stationLayout->addWidget(new EquipmentBarChart("Equipment by station · top 5 + reserve",stationValues,QColor("#8560e8")));
+    charts->addWidget(byTypeCard,0,0); charts->addWidget(byStationCard,0,1); charts->setColumnStretch(0,1); charts->setColumnStretch(1,1); layout->addLayout(charts,1);
+    auto *footer=new QHBoxLayout; footer->addWidget(text("Counts reflect current records; no historical trend is inferred.","smallMuted"),1);
+    auto *close=button("Close",""); close->setObjectName("closeEquipmentStatisticsButton"); footer->addWidget(close); layout->addLayout(footer);
     QObject::connect(close,&QPushButton::clicked,&dialog,&QDialog::accept); dialog.exec();
 }
 
@@ -741,7 +968,11 @@ public:
         head->addWidget(new Glyph("thermometer",blue,50,true));
         auto *copy=new QVBoxLayout; copy->setSpacing(1); copy->addWidget(text("Equipment Health","sectionTitle"));
         subtitle=text("Select an equipment item to view its recorded details.","smallMuted"); copy->addWidget(subtitle); head->addLayout(copy,1);
-        state=text("No selection","smallMuted"); state->setObjectName("equipmentHealthStatus"); state->setAlignment(Qt::AlignCenter); state->setFixedSize(110,28); head->addWidget(state);
+        state=text("No selection","smallMuted"); state->setObjectName("equipmentHealthStatus"); state->setProperty("role","equipmentStatus"); state->setAlignment(Qt::AlignCenter); state->setFixedSize(124,30);
+        auto *statusGlow=new QGraphicsDropShadowEffect(state); statusGlow->setBlurRadius(14); statusGlow->setOffset(0,1); statusGlow->setColor(QColor(22,163,74,38)); state->setGraphicsEffect(statusGlow); head->addWidget(state);
+        statusPulse=new QPropertyAnimation(statusGlow,"blurRadius",this); statusPulse->setDuration(1500);
+        statusPulse->setStartValue(10.0); statusPulse->setKeyValueAt(.5,19.0); statusPulse->setEndValue(10.0);
+        statusPulse->setEasingCurve(QEasingCurve::InOutSine); statusPulse->setLoopCount(-1);
         updated=text("","smallMuted"); head->addWidget(updated); box->addLayout(head);
 
         cardsGrid=new QGridLayout; cardsGrid->setSpacing(10); box->addLayout(cardsGrid);
@@ -758,14 +989,15 @@ public:
         identityGrid->addLayout(photoRow,0,0,1,2);
         const QStringList labels{"Equipment ID","Type","Model","Serial Number","Station","Physical Location","Unit","Status","Last Update"};
         for(int i=0;i<labels.size();++i) { identityGrid->addWidget(text(labels[i],"smallMuted"),i+1,0); identityValues << text("—","smallMuted"); identityGrid->addWidget(identityValues.last(),i+1,1); }
+        identityValues[7]->setProperty("role","equipmentStatus"); identityValues[7]->setAlignment(Qt::AlignCenter); identityValues[7]->setFixedSize(124,28);
         identityGrid->setColumnStretch(1,1);
 
         auto *recommendations=card("detail"); recommendations->setObjectName("equipmentRecommendationsCard");
         auto *recommendationLayout=new QVBoxLayout(recommendations); recommendationLayout->setContentsMargins(12,10,12,10); recommendationLayout->setSpacing(8);
-        recommendationLayout->addWidget(text("Status & Recommendations","detailTitle"));
-        const QStringList titles{"Equipment status","Update freshness","Recommended action"};
-        const QStringList glyphs{"check","calendar","bulb"};
-        const QColor colors[]{QColor("#00b864"),QColor("#0d47a1"),QColor("#ffaf00")};
+        recommendationLayout->addWidget(text("Operational Insights","detailTitle"));
+        const QStringList titles{"Update freshness","Recommended action"};
+        const QStringList glyphs{"calendar","bulb"};
+        const QColor colors[]{QColor("#0d47a1"),QColor("#ffaf00")};
         for(int i=0;i<titles.size();++i) {
             auto *row=new QHBoxLayout; row->setSpacing(10); row->addWidget(new Glyph(glyphs[i],colors[i],30,true),0,Qt::AlignTop);
             auto *copyRow=new QVBoxLayout; copyRow->setSpacing(1); copyRow->addWidget(text(titles[i],"detailTitle"));
@@ -791,7 +1023,11 @@ protected:
 private:
     void updatePanel() {
         if(!hasSelection) {
+            if(statusPulse) statusPulse->stop();
             subtitle->setText("Select an equipment item to view its recorded details."); state->setText("No selection"); updated->clear();
+            state->setProperty("tone","neutral"); identityValues[7]->setProperty("tone","neutral");
+            state->style()->unpolish(state); state->style()->polish(state);
+            identityValues[7]->style()->unpolish(identityValues[7]); identityValues[7]->style()->polish(identityValues[7]);
             photoPreview->setPixmap(QPixmap()); photoPreview->setText("Select an equipment item");
             photoCaption->setText("Select an item to view its saved photo or equipment icon.");
             for(QLabel *value:identityValues) value->setText("—");
@@ -800,10 +1036,15 @@ private:
         }
         const EquipmentAssessment assessment=assessEquipment(selected);
         const QColor color=selected.status=="Online"?QColor("#16a34a"):selected.status=="Offline"?QColor("#ef4444"):QColor("#d97706");
-        state->setText(selected.status); state->setStyleSheet(QString("border-radius:14px;background:%1;color:%2;").arg(selected.status=="Online"?"#dcfce7":selected.status=="Offline"?"#fee2e2":"#fef3c7",color.name()));
+        const QString tone=selected.status=="Online"?"online":selected.status=="Offline"?"offline":"maintenance";
+        state->setText(selected.status); state->setProperty("tone",tone); identityValues[7]->setProperty("tone",tone);
+        state->style()->unpolish(state); state->style()->polish(state);
+        identityValues[7]->style()->unpolish(identityValues[7]); identityValues[7]->style()->polish(identityValues[7]);
+        if(auto *glow=qobject_cast<QGraphicsDropShadowEffect *>(state->graphicsEffect())) glow->setColor(QColor(color.red(),color.green(),color.blue(),42));
+        if(statusPulse && statusPulse->state()!=QAbstractAnimation::Running) statusPulse->start();
         const QDateTime updateDate=QDateTime::fromString(selected.updated,Qt::ISODate);
         const QString updateText=updateDate.isValid()?updateDate.toString("dd MMM yyyy HH:mm"):QStringLiteral("Not recorded");
-        subtitle->setText(QString("Operational assessment for %1.").arg(selected.id));
+        subtitle->setText(QString("Equipment %1").arg(selected.id));
         updated->setText(assessment.freshness);
         photoCaption->setText(selected.photoBase64.isEmpty()
             ? QStringLiteral("No photo saved; showing the equipment type icon.")
@@ -814,11 +1055,11 @@ private:
             selected.location.isEmpty()?QStringLiteral("Not specified"):selected.location,
             selected.unit,selected.status,updateText};
         for(int i=0;i<identity.size();++i) identityValues[i]->setText(identity[i]);
-        recommendationValues[0]->setText(selected.status);
-        recommendationValues[1]->setText(assessment.freshness);
-        recommendationValues[2]->setText(assessment.recommendation);
+        recommendationValues[0]->setText(assessment.freshness);
+        recommendationValues[1]->setText(assessment.recommendation);
     }
     QLabel *subtitle=nullptr,*state=nullptr,*updated=nullptr,*photoPreview=nullptr,*photoCaption=nullptr;
+    QPropertyAnimation *statusPulse=nullptr;
     QList<QLabel *> identityValues,recommendationValues;
     QGridLayout *cardsGrid=nullptr;
     EquipmentRecord selected;
@@ -923,12 +1164,12 @@ protected:
         const bool today=day==QDate::currentDate();
         const bool inMonth=day.month()==monthShown() && day.year()==yearShown();
         const QRectF cell=QRectF(rect).adjusted(3,3,-3,-3);
-        painter->fillRect(rect,Qt::white);
-        painter->setPen(today && !selected?QPen(blue,1.3):QPen(Qt::NoPen));
-        painter->setBrush(selected?blue:today?QColor("#eef6ff"):QColor(Qt::white));
+        painter->fillRect(rect,AppTheme::brush(*painter, Qt::white));
+        painter->setPen(AppTheme::pen(*painter, today && !selected?QPen(blue,1.3):QPen(Qt::NoPen)));
+        painter->setBrush(AppTheme::brush(*painter, selected?blue:today?QColor("#eef6ff"):QColor(Qt::white)));
         painter->drawRoundedRect(cell,8,8);
         QFont font("Segoe UI"); font.setPixelSize(14); font.setBold(selected || today); painter->setFont(font);
-        painter->setPen(selected?Qt::white:!inMonth?QColor("#a1aec0"):day.dayOfWeek()>5?QColor("#62738c"):navy);
+        painter->setPen(AppTheme::pen(*painter, selected?Qt::white:!inMonth?QColor("#a1aec0"):day.dayOfWeek()>5?QColor("#62738c"):navy));
         painter->drawText(rect,Qt::AlignCenter,QString::number(day.day()));
         painter->restore();
     }
@@ -1039,7 +1280,7 @@ public:
         body=new QVBoxLayout(content); body->setContentsMargins(24,14,24,22); body->setSpacing(12);
         auto *pageHeader=new QGridLayout; pageHeader->setContentsMargins(0,0,0,0); pageHeader->setHorizontalSpacing(14); pageHeader->setVerticalSpacing(2);
         pageHeader->addWidget(text("Equipment","pageTitle"),0,0);
-        auto *subtitle=text("Manage the equipment inventory, review current status and update dates, and find compatible reserve replacements.","subtitle");
+        auto *subtitle=text("Track devices, status and station assignments.","subtitle");
         subtitle->setWordWrap(true); pageHeader->addWidget(subtitle,1,0);
         auto *actions=new QHBoxLayout; actions->setSpacing(8);
         auto *exportButton=button("Export PDF","export"); exportButton->setObjectName("exportEquipmentButton");
@@ -1056,10 +1297,10 @@ public:
         pageHeader->addLayout(actions,0,1,2,1,Qt::AlignRight|Qt::AlignVCenter); pageHeader->setColumnStretch(0,1);
         body->addLayout(pageHeader);
         auto *cards=new QHBoxLayout; cards->setSpacing(10);
-        metrics={metricCard("Registered Equipment","0","in inventory","Total inventory","equipment",blue,"blue"),
-                 metricCard("Online Equipment","0","/ 0 total","Recorded status","wifi",QColor("#00b863"),"green"),
+        metrics={metricCard("Registered Equipment","0","in inventory","All registered","equipment",blue,"blue"),
+                 metricCard("Online Equipment","0","/ 0 total","Operational","wifi",QColor("#00b863"),"green"),
                  metricCard("Offline Equipment","0","/ 0 total","Needs attention","offline",QColor("#ff3859"),"red"),
-                 metricCard("In Maintenance","0","/ 0 total","Under maintenance","gear",QColor("#7948ff"),"purple")};
+                 metricCard("In Maintenance","0","/ 0 total","Service in progress","gear",QColor("#7948ff"),"purple")};
         for(auto *m:metrics) cards->addWidget(m,1);
         body->addLayout(cards);
         query=search("Search ID, type, model, station or serial number...");
@@ -1081,17 +1322,6 @@ public:
         body->addLayout(filters);
         resultLabel=text("","smallMuted"); resultLabel->setObjectName("equipmentResultCount"); body->addWidget(resultLabel);
         table=new EquipmentTable; body->addWidget(table);
-        auto *statusPulse=new QTimer(this);
-        statusPulse->setInterval(75);
-        QObject::connect(statusPulse,&QTimer::timeout,this,[this,phase=0.0]() mutable {
-            if(!isVisible()) return;
-            phase+=0.17;
-            const qreal level=(1.0+std::sin(phase))*0.5;
-            for(int index:{1,2})
-                static_cast<Glyph *>(metrics[index]->layout()->itemAt(0)->widget())->setPulseLevel(level);
-            table->setPulseLevel(level);
-        });
-        statusPulse->start();
         const bool oracleEquipment = Connection::createInstance().isConnected();
         feedback=text(loaded
             ? (oracleEquipment ? "Oracle inventory: equipment changes are saved in the EQUIPEMENT table."
@@ -1222,6 +1452,15 @@ private:
         for(int i=0;i<4;++i) {
             metrics[i]->findChild<QLabel *>("metricValue")->setText(QString::number(counts[i]));
             metrics[i]->findChild<QLabel *>("metricTotal")->setText(i?QString("/ %1 total").arg(counts[0]):"in inventory");
+            auto *meterWidget=metrics[i]->findChild<QWidget *>("metricMeter");
+            auto *meter=dynamic_cast<MiniBars *>(meterWidget);
+            if(!meter) continue;
+            const qreal target=i==0?(counts[0]>0?1.0:0.0):(counts[0]>0?qreal(counts[i])/counts[0]:0.0);
+            if(auto *share=metrics[i]->findChild<QLabel *>("metricShare")) share->setText(i==0?QStringLiteral("%1%").arg(counts[0]>0?100:0):QStringLiteral("%1%").arg(qRound(target*100)));
+            auto *animation=new QVariantAnimation(meter); animation->setDuration(380); animation->setStartValue(meter->progress()); animation->setEndValue(target); animation->setEasingCurve(QEasingCurve::OutCubic);
+            QObject::connect(animation,&QVariantAnimation::valueChanged,meter,[meter](const QVariant &value){meter->setProgress(value.toReal());});
+            QObject::connect(animation,&QVariantAnimation::finished,animation,&QObject::deleteLater); animation->start();
+            meter->setToolTip(i==0?QString("%1 item(s) in the inventory").arg(counts[i]):QString("%1 of %2 equipment items · %3%").arg(counts[i]).arg(counts[0]).arg(counts[0]?qRound(100.0*counts[i]/counts[0]):0));
         }
     }
     void adapt() {

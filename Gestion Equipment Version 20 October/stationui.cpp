@@ -1,3 +1,4 @@
+#include "apptheme.h"
 #include "stationui.h"
 
 #include <QApplication>
@@ -70,8 +71,8 @@ QIcon stationIcon(const QString &name, const QColor &color = QColor("#091b40")) 
     QPainter painter(&pixels);
     painter.setRenderHint(QPainter::Antialiasing);
     painter.scale(2, 2);
-    painter.setPen(QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    painter.setBrush(Qt::NoBrush);
+    painter.setPen(AppTheme::pen(painter, QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)));
+    painter.setBrush(AppTheme::brush(painter, Qt::NoBrush));
     QPainterPath path;
     if (name == "search") {
         painter.drawEllipse(QRectF(3, 3, 13, 13));
@@ -238,7 +239,7 @@ public:
 protected:
     void paintEvent(QPaintEvent *) override {
         QPainter painter(this);
-        painter.fillRect(rect(), QColor("#061b35"));
+        painter.fillRect(rect(),AppTheme::brush(painter,  QColor("#061b35")));
         const QPixmap photo(":/assets/backgrounds/login_background.png");
         const QRectF area(0, height() * 0.36, width(), height() * 0.64);
         QSizeF photoSize = photo.size();
@@ -255,7 +256,7 @@ protected:
         gradient.setColorAt(0.35, QColor(6, 27, 53, 80));
         gradient.setColorAt(0.72, QColor(6, 27, 53, 10));
         gradient.setColorAt(1, QColor(6, 27, 53, 235));
-        painter.fillRect(area, gradient);
+        painter.fillRect(area,AppTheme::brush(painter,  gradient));
     }
 };
 
@@ -271,10 +272,10 @@ protected:
     void paintEvent(QPaintEvent *) override {
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor("#e0e7f0"));
+        painter.setPen(AppTheme::pen(painter, Qt::NoPen));
+        painter.setBrush(AppTheme::brush(painter, QColor("#e0e7f0")));
         painter.drawRoundedRect(rect(), 5, 5);
-        painter.setBrush(color);
+        painter.setBrush(AppTheme::brush(painter, color));
         painter.drawRoundedRect(QRect(0, 0, width() * value / 100, height()), 5, 5);
     }
 };
@@ -320,15 +321,15 @@ protected:
         for (int tick = 0; tick <= tickSteps; ++tick) {
             const int value = qRound(scaleMaximum * double(tick) / tickSteps);
             const qreal y = bottom - plotHeight * tick / tickSteps;
-            painter.setPen(QPen(QColor("#e2eaf4"), 1));
+            painter.setPen(AppTheme::pen(painter, QPen(QColor("#e2eaf4"), 1)));
             painter.drawLine(QPointF(left, y), QPointF(right, y));
-            painter.setPen(QColor("#63779b"));
+            painter.setPen(AppTheme::pen(painter, QColor("#63779b")));
             painter.drawText(QRectF(0, y - 8, left - 6, 16), Qt::AlignRight | Qt::AlignVCenter,
                              QString::number(value) + suffix);
         }
 
         if (labels.isEmpty()) {
-            painter.setPen(QColor("#63779b"));
+            painter.setPen(AppTheme::pen(painter, QColor("#63779b")));
             painter.drawText(rect(), Qt::AlignCenter, "No matching stations");
             return;
         }
@@ -345,12 +346,12 @@ protected:
             const QRectF barRect(centerX - barWidth / 2, bottom - barHeight,
                                  barWidth, barHeight);
             const QColor color = colors.value(index, QColor("#087cff"));
-            painter.setPen(Qt::NoPen);
-            painter.setBrush(color);
+            painter.setPen(AppTheme::pen(painter, Qt::NoPen));
+            painter.setBrush(AppTheme::brush(painter, color));
             if (barHeight > 0)
                 painter.drawRoundedRect(barRect, 4, 4);
 
-            painter.setPen(QColor("#26365e"));
+            painter.setPen(AppTheme::pen(painter, QColor("#26365e")));
             const QString valueText = QString::number(values.value(index)) + suffix;
             painter.drawText(QRectF(centerX - slotWidth / 2, qMax(top, bottom - barHeight - 22),
                                     slotWidth, 18), Qt::AlignCenter, valueText);
@@ -359,7 +360,7 @@ protected:
             labelFont.setBold(false);
             labelFont.setPointSize(8);
             painter.setFont(labelFont);
-            painter.setPen(QColor("#52688e"));
+            painter.setPen(AppTheme::pen(painter, QColor("#52688e")));
             painter.drawText(QRectF(left + slotWidth * index, bottom + 7,
                                     slotWidth, height() - bottom - 8),
                              Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap, labels[index]);
@@ -383,14 +384,14 @@ protected:
         painter.setRenderHint(QPainter::Antialiasing);
         QColor background = color;
         background.setAlpha(name == "wifi" || name == "offline" ? qRound(22 + 65 * pulseLevel) : 22);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(background);
+        painter.setPen(AppTheme::pen(painter, Qt::NoPen));
+        painter.setBrush(AppTheme::brush(painter, background));
         painter.drawEllipse(rect());
         painter.save();
         painter.setOpacity(name == "wifi" || name == "offline" ? 0.55 + 0.45 * pulseLevel : 1.0);
         painter.translate(12, 12);
-        painter.setPen(QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        painter.setBrush(Qt::NoBrush);
+        painter.setPen(AppTheme::pen(painter, QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)));
+        painter.setBrush(AppTheme::brush(painter, Qt::NoBrush));
         if (name == "wifi" || name == "offline") {
             painter.drawArc(QRectF(0, 4, 24, 20), 35 * 16, 110 * 16);
             painter.drawArc(QRectF(5, 9, 14, 12), 35 * 16, 110 * 16);
@@ -420,8 +421,8 @@ protected:
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing);
         color.setAlpha(65);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(color);
+        painter.setPen(AppTheme::pen(painter, Qt::NoPen));
+        painter.setBrush(AppTheme::brush(painter, color));
         for (int i = 0; i < 4; ++i)
             painter.drawRoundedRect(QRectF(i * width() / 4.0, 32 - i * 9,
                                            qMin(4.0, width() / 6.0), 10 + i * 9), 2, 2);
@@ -536,11 +537,11 @@ public:
         {
             QPainter painter(&avatarImage);
             painter.setRenderHint(QPainter::Antialiasing);
-            painter.setPen(Qt::NoPen);
-            painter.setBrush(QColor("#edf2fb"));
+            painter.setPen(AppTheme::pen(painter, Qt::NoPen));
+            painter.setBrush(AppTheme::brush(painter, QColor("#edf2fb")));
             painter.drawEllipse(0, 0, 45, 45);
-            painter.setBrush(Qt::NoBrush);
-            painter.setPen(QPen(QColor("#6383ba"), 2));
+            painter.setBrush(AppTheme::brush(painter, Qt::NoBrush));
+            painter.setPen(AppTheme::pen(painter, QPen(QColor("#6383ba"), 2)));
             painter.drawEllipse(18, 10, 10, 11);
             painter.drawArc(QRect(11, 24, 25, 20), 20 * 16, 140 * 16);
         }
@@ -917,12 +918,12 @@ private:
 
         const auto drawTableHeader = [&](int top) {
             const int headerHeight = 34;
-            painter.fillRect(QRect(left, top, width, headerHeight), QColor("#061b35"));
+            painter.fillRect(QRect(left, top, width, headerHeight),AppTheme::brush(painter,  QColor("#061b35")));
             QFont headerFont("Segoe UI");
             headerFont.setPointSizeF(8.5);
             headerFont.setBold(true);
             painter.setFont(headerFont);
-            painter.setPen(Qt::white);
+            painter.setPen(AppTheme::pen(painter, Qt::white));
             int x = left;
             for (int column = 0; column < 7; ++column) {
                 const QRect cell(x, top, columnWidths[column], headerHeight);
@@ -938,7 +939,7 @@ private:
         titleFont.setPointSizeF(20);
         titleFont.setBold(true);
         painter.setFont(titleFont);
-        painter.setPen(QColor("#10152e"));
+        painter.setPen(AppTheme::pen(painter, QColor("#10152e")));
         painter.drawText(QRect(left, y, width, 32), Qt::AlignVCenter | Qt::AlignLeft,
                          "Weather Station Report");
         y += 38;
@@ -946,7 +947,7 @@ private:
         QFont detailFont("Segoe UI");
         detailFont.setPointSizeF(9.5);
         painter.setFont(detailFont);
-        painter.setPen(QColor("#60749c"));
+        painter.setPen(AppTheme::pen(painter, QColor("#60749c")));
         painter.drawText(QRect(left, y, width, 20), Qt::AlignVCenter | Qt::AlignLeft,
                          "Generated " + QDate::currentDate().toString("MMMM d, yyyy"));
         y += 27;
@@ -955,7 +956,7 @@ private:
         summaryFont.setPointSizeF(10);
         summaryFont.setBold(true);
         painter.setFont(summaryFont);
-        painter.setPen(QColor("#26365e"));
+        painter.setPen(AppTheme::pen(painter, QColor("#26365e")));
         const QString summary = QString("%1 stations shown   •   %2 online   •   %3 offline   •   %4% average availability")
                                     .arg(visibleStationIndices.size())
                                     .arg(onlineCount)
@@ -977,7 +978,7 @@ private:
                 continuationFont.setPointSizeF(13);
                 continuationFont.setBold(true);
                 painter.setFont(continuationFont);
-                painter.setPen(QColor("#10152e"));
+                painter.setPen(AppTheme::pen(painter, QColor("#10152e")));
                 painter.drawText(QRect(left, y, width, 26), Qt::AlignVCenter | Qt::AlignLeft,
                                  "Weather Station Report — continued");
                 y += 32;
@@ -991,8 +992,8 @@ private:
                                    QString::number(station.availability) + "%", station.status,
                                    station.lastUpdate};
             const QRect rowRect(left, y, width, rowHeight);
-            painter.fillRect(rowRect, row % 2 == 0 ? QColor("#f5f8fd") : QColor(Qt::white));
-            painter.setPen(QColor("#e3ebf5"));
+            painter.fillRect(rowRect,AppTheme::brush(painter,  row % 2 == 0 ? QColor("#f5f8fd") : QColor(Qt::white)));
+            painter.setPen(AppTheme::pen(painter, QColor("#e3ebf5")));
             painter.drawRect(rowRect);
 
             int x = left;
@@ -1001,11 +1002,11 @@ private:
                 const int alignment = column == 3
                                           ? Qt::AlignCenter | Qt::TextWordWrap
                                           : Qt::AlignVCenter | Qt::AlignLeft | Qt::TextWordWrap;
-                painter.setPen(column == 5
+                painter.setPen(AppTheme::pen(painter, column == 5
                                    ? (station.status == "Maintenance" ? QColor("#d58b00")
                                       : station.status == "Offline" ? QColor("#e34754")
                                                                      : QColor("#00a866"))
-                                   : QColor("#14234b"));
+                                   : QColor("#14234b")));
                 painter.drawText(cell.adjusted(6, 2, -6, -2), alignment, values[column]);
                 x += columnWidths[column];
             }
@@ -1013,7 +1014,7 @@ private:
         }
 
         if (visibleStationIndices.isEmpty()) {
-            painter.setPen(QColor("#60749c"));
+            painter.setPen(AppTheme::pen(painter, QColor("#60749c")));
             painter.drawText(QRect(left, y + 12, width, 30), Qt::AlignVCenter | Qt::AlignLeft,
                              "No stations match the current filters.");
         }

@@ -1,4 +1,6 @@
+#include "apptheme.h"
 #include "skysensewindow.h"
+#include "loginatmosphere.h"
 #include "ui_skysensewindow.h"
 #include "equipmentui.h"
 #include "serviceui.h"
@@ -43,6 +45,9 @@
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QTextCharFormat>
+#include <QTimer>
+#include <QtMath>
+#include <cmath>
 #include <QDialog>
 #include <QFormLayout>
 #include <QTableWidget>
@@ -90,12 +95,12 @@ protected:
     void paintEvent(QPaintEvent *) override
     {
         QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
-        p.setPen(QPen(QColor("#315784"), 3.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        p.setBrush(Qt::NoBrush);
+        p.setPen(AppTheme::pen(p, QPen(QColor("#315784"), 3.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)));
+        p.setBrush(AppTheme::brush(p, Qt::NoBrush));
         QPainterPath eye; eye.moveTo(8, 33); eye.cubicTo(20, 15, 46, 15, 58, 33);
         eye.cubicTo(48, 49, 20, 50, 8, 33); p.drawPath(eye);
         p.drawEllipse(QPointF(33, 33), 7, 7);
-        p.setPen(QPen(QColor("#d64b5b"), 4.0, Qt::SolidLine, Qt::RoundCap));
+        p.setPen(AppTheme::pen(p, QPen(QColor("#d64b5b"), 4.0, Qt::SolidLine, Qt::RoundCap)));
         p.drawLine(QPointF(13, 54), QPointF(54, 12));
     }
 };
@@ -139,8 +144,8 @@ QIcon workspaceHeaderIcon(const QString &name, const QColor &color = QColor("#17
     QPainter painter(&pixels);
     painter.setRenderHint(QPainter::Antialiasing);
     painter.scale(2, 2);
-    painter.setPen(QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    painter.setBrush(Qt::NoBrush);
+    painter.setPen(AppTheme::pen(painter, QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)));
+    painter.setBrush(AppTheme::brush(painter, Qt::NoBrush));
     if (name == "search") {
         painter.drawEllipse(QRectF(3, 3, 13, 13));
         painter.drawLine(15, 15, 22, 22);
@@ -164,12 +169,12 @@ QIcon workspaceHeaderIcon(const QString &name, const QColor &color = QColor("#17
     return QIcon(pixels);
 }
 
-enum class Symbol { Chart, Target, Shield, Mail, Lock, Eye, Enter };
+enum class Symbol { Chart, Target, Shield, Mail, Lock, Eye, EyeSlash, Enter };
 void drawSymbol(QPainter &p, Symbol symbol, const QColor &color)
 {
     p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p.setBrush(Qt::NoBrush);
+    p.setPen(AppTheme::pen(p, QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)));
+    p.setBrush(AppTheme::brush(p, Qt::NoBrush));
     QPainterPath path;
     switch (symbol) {
     case Symbol::Chart:
@@ -192,6 +197,10 @@ void drawSymbol(QPainter &p, Symbol symbol, const QColor &color)
     case Symbol::Eye:
         path.moveTo(2, 12); path.cubicTo(7, 3, 17, 3, 22, 12);
         path.cubicTo(17, 21, 7, 21, 2, 12); p.drawPath(path);
+        p.drawEllipse(QPointF(12, 12), 3, 3); break;
+    case Symbol::EyeSlash:
+        path.moveTo(2, 12); path.cubicTo(7, 3, 17, 3, 22, 12);
+        path.cubicTo(17, 21, 7, 21, 2, 12); p.drawPath(path);
         p.drawEllipse(QPointF(12, 12), 3, 3); p.drawLine(3, 21, 21, 3); break;
     case Symbol::Enter:
         p.drawLine(14, 3, 21, 3); p.drawLine(21, 3, 21, 21); p.drawLine(21, 21, 14, 21);
@@ -205,29 +214,9 @@ QIcon icon(Symbol symbol, const QColor &color)
     pixmap.setDevicePixelRatio(2);
     return QIcon(pixmap);
 }
-class BackgroundPanel final : public QWidget
-{
-    QPixmap image{":/assets/backgrounds/login_background.jpg"};
-public:
-    explicit BackgroundPanel(QWidget *parent = nullptr) : QWidget(parent) {}
-protected:
-    void paintEvent(QPaintEvent *) override
-    {
-        QPainter p(this); p.setRenderHint(QPainter::SmoothPixmapTransform);
-        QSizeF size = image.size(); size.scale(this->size(), Qt::KeepAspectRatioByExpanding);
-        // Center the cover crop to retain the radar, mountains and lake.
-        p.drawPixmap(QRectF((width() - size.width()) / 2, (height() - size.height()) / 2,
-                           size.width(), size.height()), image, image.rect());
-        QLinearGradient shade(0, 0, width(), height() * .7);
-        shade.setColorAt(0, QColor(0, 15, 36, 130));
-        shade.setColorAt(.65, QColor(0, 20, 45, 55));
-        shade.setColorAt(1, QColor(0, 20, 45, 8));
-        p.fillRect(rect(), shade);
-    }
-};
 class Brand final : public QWidget
 {
-    QPixmap image{":/assets/logo/skysense_logo.png"};
+    QPixmap image{":/assets/logo/skysense_logo_login_hd.png"};
 public:
     explicit Brand(QWidget *parent = nullptr) : QWidget(parent)
     { setFixedHeight(130); setMaximumWidth(440); setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed); }
@@ -235,23 +224,9 @@ protected:
     void paintEvent(QPaintEvent *) override
     {
         QPainter p(this); p.setRenderHint(QPainter::SmoothPixmapTransform);
-        QSizeF size = image.size(); size.scale(this->size(), Qt::KeepAspectRatio);
-        p.drawPixmap(QRectF(0, (height() - size.height()) / 2, size.width(), size.height()), image, image.rect());
-    }
-};
-class FeatureIcon final : public QWidget
-{
-    Symbol symbol;
-public:
-    explicit FeatureIcon(Symbol value) : symbol(value) { setFixedSize(72, 72); }
-protected:
-    void paintEvent(QPaintEvent *) override
-    {
-        QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
-        p.setPen(QPen(QColor("#009fee"), 1.3)); p.setBrush(QColor(0, 44, 77, 100));
-        p.drawRoundedRect(QRectF(1, 1, 70, 70), 12, 12);
-        p.translate(16, 16); p.scale(40.0 / 24, 40.0 / 24);
-        drawSymbol(p, symbol, QColor("#00bfff"));
+        QRectF available = rect();
+        QSizeF size = image.size(); size.scale(available.size(), Qt::KeepAspectRatio);
+        p.drawPixmap(QRectF(available.x(), (height() - size.height()) / 2, size.width(), size.height()), image, image.rect());
     }
 };
 class RememberBox final : public QCheckBox
@@ -264,7 +239,7 @@ protected:
         QCheckBox::paintEvent(event);
         if (!isChecked()) return;
         QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
-        p.setPen(QPen(Qt::white, 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setPen(AppTheme::pen(p, QPen(Qt::white, 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)));
         const qreal y = height() / 2.0;
         QPainterPath tick; tick.moveTo(6, y); tick.lineTo(10, y + 4); tick.lineTo(17, y - 4); p.drawPath(tick);
     }
@@ -273,14 +248,6 @@ QLabel *label(const QString &text, const char *name)
 {
     auto *widget = new QLabel(text); widget->setObjectName(name);
     widget->setWordWrap(true); widget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum); return widget;
-}
-void addFeature(QVBoxLayout *layout, Symbol symbol, const QString &title, const QString &subtitle)
-{
-    auto *row = new QHBoxLayout; row->setSpacing(26); row->addWidget(new FeatureIcon(symbol));
-    auto *copy = new QVBoxLayout; copy->setSpacing(2);
-    copy->addStretch(); copy->addWidget(label(title, "featureTitle"));
-    copy->addWidget(label(subtitle, "featureSubtitle")); copy->addStretch();
-    row->addLayout(copy, 1); layout->addLayout(row);
 }
 QLineEdit *input(const char *name, const QString &placeholder, Symbol symbol)
 {
@@ -357,7 +324,7 @@ SkySenseWindow::SkySenseWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui
 {
     ui->setupUi(this); setMinimumSize(1100, 700);
     qApp->installEventFilter(new UiFeedbackFilter(this, this));
-    setWindowIcon(QIcon(":/assets/logo/skysense_logo.png"));
+    setWindowIcon(QIcon(":/assets/logo/skysense_logo_login_hd.png"));
     setupLoginUi(); setupStyles(loginPage); updateResponsiveLayout();
 }
 SkySenseWindow::~SkySenseWindow() { delete ui; }
@@ -367,56 +334,79 @@ void SkySenseWindow::setupLoginUi()
     pages->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     pages->setMinimumSize(0, 0);
     auto *hostLayout = new QVBoxLayout(ui->centralWidget); hostLayout->setContentsMargins(0, 0, 0, 0); hostLayout->addWidget(pages);
-    loginPage = new QWidget; auto *root = new QHBoxLayout(loginPage); root->setContentsMargins(0, 0, 0, 0); root->setSpacing(0);
-    auto *leftPanel = new BackgroundPanel; leftPanel->setObjectName("leftPanel");
+    loginPage = new LoginScene; auto *root = new QHBoxLayout(loginPage); root->setContentsMargins(0, 0, 0, 0); root->setSpacing(0);
+    auto *leftPanel = new QWidget; leftPanel->setObjectName("leftPanel");
     leftPanel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     auto *left = new QVBoxLayout(leftPanel); leftLayout = left; left->setContentsMargins(70, 48, 42, 40); left->setSpacing(0);
-    left->addWidget(new Brand); addResponsiveGap(left, 28);
-    left->addWidget(label("Smarter Weather.", "headline"));
-    left->addWidget(label("Safer Tomorrow.", "headlineCyan")); addResponsiveGap(left, 10);
-    left->addWidget(label("Real-time data. Smarter insights.\nA more resilient world.", "supporting"));
+    left->addWidget(label("SKYSENSE   /   WEATHER OPERATIONS", "heroEyebrow"));
+    addResponsiveGap(left, 30);
+    left->addWidget(label("Take control of your", "headline"));
+    left->addWidget(label("weather operations.", "headlineCyan"));
+    addResponsiveGap(left, 15);
+    left->addWidget(label("Plan work, track progress and coordinate your team.", "supporting"));
     addResponsiveGap(left, 26);
-    auto *features = new QVBoxLayout; features->setSpacing(16);
-    addFeature(features, Symbol::Chart, "Real-Time Monitoring", "Live weather data from global networks");
-    addFeature(features, Symbol::Target, "Data-Driven Decisions", "Turn insights into smarter actions.");
-    addFeature(features, Symbol::Shield, "Safer Communities", "Build a more resilient tomorrow");
-    left->addLayout(features); left->addStretch(1);
+    auto *values = new QHBoxLayout; values->setSpacing(18);
+    for (const QString &value : {QString("Clarity."), QString("Precision."), QString("Confidence.")}) {
+        auto *item = new QFrame; item->setObjectName("valueTile");
+        auto *row = new QHBoxLayout(item); row->setContentsMargins(15,12,15,12); row->setSpacing(10);
+        auto *gem = new QLabel; gem->setObjectName("valueGem"); gem->setFixedSize(28,28);
+        const Symbol glyph = value == "Clarity." ? Symbol::Eye : value == "Precision." ? Symbol::Target : Symbol::Shield;
+        gem->setPixmap(icon(glyph,QColor("#9aeaff")).pixmap(28,28));
+        row->addWidget(gem); row->addWidget(label(value,"valueText")); values->addWidget(item);
+    }
+    auto *sceneSpace = new QWidget(leftPanel); sceneSpace->setObjectName("sceneSpace");
+    sceneSpace->setMinimumHeight(245); left->addWidget(sceneSpace, 3);
+    addResponsiveGap(left, 14);
+    left->addLayout(values);
     auto *rightPanel = new QWidget; rightPanel->setObjectName("rightPanel");
     rightPanel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     auto *right = new QHBoxLayout(rightPanel); rightLayout = right; right->setContentsMargins(36, 40, 36, 38);
-    auto *form = new QWidget; form->setObjectName("loginForm"); form->setMaximumWidth(460); form->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
-    auto *column = new QVBoxLayout(form); column->setContentsMargins(0, 0, 0, 0); column->setSpacing(0);
-    column->addStretch(1); column->addWidget(new Brand); addResponsiveGap(column, 28);
-    column->addWidget(label("Welcome Back", "welcomeTitle")); addResponsiveGap(column, 4);
-    column->addWidget(label("Sign in to access your SkySense workspace.", "loginSubtitle")); addResponsiveGap(column, 36);
-    auto *emailLabel = label("Email Address", "fieldLabel"); column->addWidget(emailLabel); addResponsiveGap(column, 8);
+    auto *form = new QWidget; form->setObjectName("loginForm"); form->setMaximumWidth(460); form->setMaximumHeight(610); form->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    auto *formShadow=new QGraphicsDropShadowEffect(form); formShadow->setBlurRadius(65); formShadow->setOffset(0,24); formShadow->setColor(QColor(0,0,0,135)); form->setGraphicsEffect(formShadow);
+    auto *column = new QVBoxLayout(form); column->setContentsMargins(34, 26, 34, 24); column->setSpacing(0);
+    auto *accent = new QFrame(form); accent->setObjectName("loginAccent"); accent->setFixedSize(56, 4); auto *themeRow = new QHBoxLayout;
+    themeRow->addWidget(accent); themeRow->addStretch();
+    auto *loginTheme = new ThemeSwitch(form); loginTheme->setObjectName("loginThemeSwitch");
+    themeRow->addWidget(loginTheme); column->addLayout(themeRow); addResponsiveGap(column, 12);
+    column->addStretch(1); auto *formBrand = new Brand; formBrand->setObjectName("loginBrand"); formBrand->setMaximumWidth(360); column->addWidget(formBrand); addResponsiveGap(column, 8);
+    auto *workspaceBadge=new QFrame; workspaceBadge->setObjectName("workspaceBadge"); workspaceBadge->setAccessibleName("SkySense operations workspace");
+    auto *workspaceRow=new QHBoxLayout(workspaceBadge); workspaceRow->setContentsMargins(10,5,12,5); workspaceRow->setSpacing(7);
+    auto *workspaceDot=new QLabel; workspaceDot->setObjectName("workspaceBadgeDot"); workspaceDot->setFixedSize(8,8); workspaceRow->addWidget(workspaceDot);
+    auto *workspaceText=new QLabel("YOUR WORKSPACE"); workspaceText->setObjectName("workspaceBadgeText"); workspaceRow->addWidget(workspaceText);
+    column->addWidget(workspaceBadge,0,Qt::AlignLeft); addResponsiveGap(column, 12);
+    column->addWidget(label("Welcome back.", "welcomeTitle")); addResponsiveGap(column, 5);
+    column->addWidget(label("Your SkySense workspace awaits.", "loginSubtitle")); addResponsiveGap(column, 22);
+    auto *emailLabel = label("Email address", "fieldLabel"); column->addWidget(emailLabel); addResponsiveGap(column, 8);
     auto *emailInput = input("emailInput", "name@company.com", Symbol::Mail); emailLabel->setBuddy(emailInput);
-    emailInput->setAccessibleName("Email Address"); column->addWidget(emailInput); addResponsiveGap(column, 22);
+    emailInput->setAccessibleName("Email address");
+    emailInput->setInputMethodHints(Qt::ImhEmailCharactersOnly | Qt::ImhNoAutoUppercase);
+    emailInput->setClearButtonEnabled(true);
+    emailInput->setToolTip("Use the email associated with your SkySense profile.");
+    column->addWidget(emailInput); addResponsiveGap(column, 18);
     auto *passwordRow = new QHBoxLayout; auto *passwordLabel = label("Password", "fieldLabel");
+    passwordLabel->setText("Password");
     passwordRow->addWidget(passwordLabel); passwordRow->addStretch(); column->addLayout(passwordRow); addResponsiveGap(column, 8);
     auto *passwordInput = input("passwordInput", "Enter your password", Symbol::Lock);
     passwordInput->setEchoMode(QLineEdit::Password); passwordInput->setAccessibleName("Password"); passwordLabel->setBuddy(passwordInput);
     QAction *eye = passwordInput->addAction(icon(Symbol::Eye, QColor("#486594")), QLineEdit::TrailingPosition);
-    eye->setText("Show password"); eye->setToolTip("Show password");
+    eye->setText("Show password"); eye->setToolTip(eye->text());
     connect(eye, &QAction::triggered, this, [passwordInput, eye] {
         const bool reveal = passwordInput->echoMode() == QLineEdit::Password;
         passwordInput->setEchoMode(reveal ? QLineEdit::Normal : QLineEdit::Password);
-        eye->setText(reveal ? "Hide password" : "Show password"); eye->setToolTip(eye->text());
+        eye->setText(reveal ? "Hide password" : "Show password");
+        eye->setToolTip(eye->text());
+        eye->setIcon(icon(reveal ? Symbol::EyeSlash : Symbol::Eye, QColor("#486594")));
     });
-    column->addWidget(passwordInput); addResponsiveGap(column, 30);
-    auto *accessNote = label("Mode démonstration : utilisez votre email et un mot de passe au choix.", "rememberNote");
-    column->addWidget(accessNote); addResponsiveGap(column, 26);
-    auto *signInButton = new QPushButton("  Sign In"); signInButton->setObjectName("signInButton");
+    column->addWidget(passwordInput); addResponsiveGap(column, 12);
+    auto *signInButton = new LoginAction("  Enter SkySense"); signInButton->setObjectName("signInButton");
     signInButton->setIcon(icon(Symbol::Enter, Qt::white)); signInButton->setIconSize(QSize(24, 24));
-    signInButton->setFixedHeight(66); signInButton->setCursor(Qt::PointingHandCursor);
+    signInButton->setFixedHeight(60); signInButton->setCursor(Qt::PointingHandCursor);
+    signInButton->setDefault(true); signInButton->setAutoDefault(true);
     auto *shadow = new QGraphicsDropShadowEffect(signInButton); shadow->setBlurRadius(24);
     shadow->setOffset(0, 6); shadow->setColor(QColor(0, 130, 230, 45)); signInButton->setGraphicsEffect(shadow);
-    column->addWidget(signInButton); column->addStretch(3); addResponsiveGap(column, 24);
-    auto *contact = label("Données de démonstration locales pour tester les interfaces.", "contactLabel");
-    contact->setAlignment(Qt::AlignCenter); column->addWidget(contact); addResponsiveGap(column, 28);
-    auto *footer = label("Les modifications sont conservées pendant cette session.", "footer");
-    footer->setAlignment(Qt::AlignCenter); column->addWidget(footer); column->addStretch(1);
-    right->addStretch(); right->addWidget(form, 1); right->addStretch(); root->addWidget(leftPanel, 62); root->addWidget(rightPanel, 38);
+    column->addWidget(signInButton); column->addStretch(2); addResponsiveGap(column, 18);
+    column->addStretch(1);
+    right->addStretch(); right->addWidget(form, 1); right->addStretch(); root->addWidget(leftPanel, 60); root->addWidget(rightPanel, 40);
     QWidget::setTabOrder(emailInput, passwordInput);
     QWidget::setTabOrder(passwordInput, signInButton);
     auto *workspacePage = new QWidget;
@@ -539,7 +529,7 @@ void SkySenseWindow::setupLoginUi()
     sharedSearch->setClearButtonEnabled(true);
     sharedSearch->addAction(workspaceHeaderIcon("search", QColor("#5d77ad")), QLineEdit::LeadingPosition);
     headerLayout->addWidget(sharedSearch, 1);
-    headerLayout->addSpacing(18);
+
     auto *calendarLabel = new QLabel(sharedHeader);
     calendarLabel->setPixmap(workspaceHeaderIcon("calendar").pixmap(24, 24));
     calendarLabel->setFixedSize(24, 24);
@@ -833,7 +823,7 @@ void SkySenseWindow::setupLoginUi()
         const QString loginId = emailInput->text().trimmed();
         const bool initialAdmin = loginId.compare(QStringLiteral("admin"), Qt::CaseInsensitive) == 0;
         if((!emailPattern.match(loginId).hasMatch() && !initialAdmin) || passwordInput->text().isEmpty()) {
-            QMessageBox::warning(this, "Check your sign-in details", "Enter a valid email address and any non-empty password to open the interface preview.");
+            QMessageBox::warning(this, "Check your sign-in details", "Enter a valid work email and password to continue.");
             return;
         }
         const QString normalizedEmail = emailInput->text().trimmed();
@@ -890,10 +880,12 @@ void SkySenseWindow::updateResponsiveLayout()
     for (const auto &gap : responsiveGaps)
         gap.first->changeSize(0, qRound(gap.second * (.5 + .5 * room)), QSizePolicy::Minimum, QSizePolicy::Fixed);
     for (auto *widget : findChildren<QWidget *>()) {
-        if (auto *brand = dynamic_cast<Brand *>(widget)) brand->setFixedHeight(adapt(86, 130));
+        if (auto *brand = dynamic_cast<Brand *>(widget))
+            brand->setFixedHeight(brand->objectName() == "loginBrand" ? adapt(58, 76) : adapt(86, 130));
     }
     for (const char *name : {"headline", "headlineCyan"})
-        findChild<QLabel *>(name)->setStyleSheet(QString("font-size: %1px;").arg(adapt(40, 52)));
+        findChild<QLabel *>(name)->setStyleSheet(QString("font-size: %1px;").arg(adapt(34, 49)));
+    if (auto *scene = findChild<QWidget *>("sceneSpace")) scene->setMinimumHeight(adapt(245, 295));
     // Recompute height-for-width labels before Qt assigns the reduced space.
     for (auto *layout : findChildren<QLayout *>()) layout->invalidate();
 }

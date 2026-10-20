@@ -8,6 +8,7 @@
   <file>assets/backgrounds/login_background.png</file>
   <file>assets/backgrounds/services_alps.png</file>
   <file>assets/logo/skysense_logo.png</file>
+  <file>assets/logo/skysense_logo_login_hd.png</file>
   <file>assets/sounds/ui_click.wav</file>
   <file alias="sounds/button_click.wav">assets/sounds/button_click.wav</file>
   <file>assets/stations/network_map.png</file>
