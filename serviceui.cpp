@@ -1,35 +1,56 @@
+#include "apptheme.h"
 #include "serviceui.h"
+#include "connection.h"
+#include "servicemodel.h"
 #include <QApplication>
 #include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
 #include <QDate>
 #include <QDateEdit>
+#include <QCalendarWidget>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDoubleSpinBox>
+#include <QDir>
 #include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFrame>
 #include <QGraphicsDropShadowEffect>
+#include <QGraphicsOpacityEffect>
 #include <QGridLayout>
+#include <QHash>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
 #include <QLineEdit>
 #include <QList>
 #include <QMessageBox>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPixmap>
 #include <QPainterPath>
+#include <QPageLayout>
+#include <QPageSize>
+#include <QPdfWriter>
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QTime>
 #include <QTimeEdit>
+#include <QToolButton>
+#include <QKeyEvent>
 #include <QResizeEvent>
 #include <QResource>
 #include <QScreen>
+#include <QSet>
 #include <QVariantAnimation>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QShowEvent>
+#include <QSpinBox>
+#include <QSignalBlocker>
 #include <QStringList>
 #include <QVector>
 #include <QTextEdit>
@@ -38,15 +59,9 @@
 #include <QStyledItemDelegate>
 #include <QTableWidget>
 #include <QVBoxLayout>
+#include <QUrl>
+#include <algorithm>
 #include <QtMath>
-
-#ifdef Q_OS_WIN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#include <mmsystem.h>
-#endif
 
 namespace {
 const QColor navy("#091b40"), muted("#5d77ad"), blue("#0785ff");
@@ -54,8 +69,8 @@ const QColor navy("#091b40"), muted("#5d77ad"), blue("#0785ff");
 void symbol(QPainter &p, const QString &name, QColor color)
 {
     p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p.setBrush(Qt::NoBrush);
+    p.setPen(AppTheme::pen(p, QPen(color, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)));
+    p.setBrush(AppTheme::brush(p, Qt::NoBrush));
     QPainterPath path;
     if (name == "home") {
         path.moveTo(2,11); path.lineTo(12,2); path.lineTo(22,11); path.moveTo(5,9); path.lineTo(5,22); path.lineTo(19,22); path.lineTo(19,9); p.drawPath(path); p.drawRect(QRectF(10,15,4,7));
@@ -119,19 +134,6 @@ QIcon icon(const QString &name, QColor color=blue)
     QPixmap px(48,48); px.fill(Qt::transparent); QPainter p(&px); p.scale(2,2); symbol(p,name,color); p.end(); px.setDevicePixelRatio(2); return QIcon(px);
 }
 
-void playClickSound()
-{
-#ifdef Q_OS_WIN
-    static const QByteArray wave=[]() {
-        QFile file(":/assets/sounds/ui_click.wav");
-        return file.open(QIODevice::ReadOnly)?file.readAll():QByteArray();
-    }();
-    if(!wave.isEmpty()) PlaySoundA(reinterpret_cast<LPCSTR>(wave.constData()),nullptr,SND_MEMORY|SND_ASYNC|SND_NODEFAULT);
-#else
-    QApplication::beep();
-#endif
-}
-
 QLabel *text(const QString &value, const char *role="body")
 {
     auto *label=new QLabel(value); label->setProperty("role",role); label->setWordWrap(true);
@@ -144,18 +146,12 @@ QPushButton *button(const QString &title, const QString &glyph, bool primary=fal
     if (!glyph.isEmpty()) b->setIcon(icon(glyph,primary?Qt::white:navy));
     b->setIconSize(QSize(20,20)); b->setProperty("primary",primary);
     b->setCursor(Qt::PointingHandCursor); b->setMinimumHeight(42);
-    QObject::connect(b,&QPushButton::clicked,b,[]() { playClickSound(); });
     return b;
 }
 
 QFrame *card(const char *role="card")
 {
     auto *f=new QFrame; f->setProperty("role",role); return f;
-}
-
-QLabel *pill(const QString &value, const QString &tone="green")
-{
-    auto *l=text(value,"pill"); l->setProperty("tone",tone); l->setAlignment(Qt::AlignCenter); return l;
 }
 
 QLineEdit *search(const QString &placeholder)
@@ -176,6 +172,61 @@ QComboBox *selector(const QStringList &values)
     auto *combo=new Selector; combo->addItems(values); combo->setFixedHeight(48); combo->setMinimumWidth(118); return combo;
 }
 
+class ServiceReportCalendar final : public QCalendarWidget {
+protected:
+    void paintCell(QPainter *painter,const QRect &rect,QDate day) const override {
+        painter->save(); painter->setRenderHint(QPainter::Antialiasing);
+        const bool selected=day==selectedDate(), today=day==QDate::currentDate();
+        const bool inMonth=day.month()==monthShown() && day.year()==yearShown();
+        const QRectF cell=QRectF(rect).adjusted(3,3,-3,-3);
+        painter->fillRect(rect,AppTheme::brush(*painter, Qt::white));
+        painter->setPen(AppTheme::pen(*painter, today&&!selected?QPen(blue,1.3):QPen(Qt::NoPen))); painter->setBrush(AppTheme::brush(*painter, selected?blue:today?QColor("#eef6ff"):Qt::white));
+        painter->drawRoundedRect(cell,8,8);
+        QFont font("Segoe UI"); font.setPixelSize(14); font.setBold(selected||today); painter->setFont(font);
+        painter->setPen(AppTheme::pen(*painter, selected?Qt::white:!inMonth?QColor("#a1aec0"):day.dayOfWeek()>5?QColor("#62738c"):navy));
+        painter->drawText(rect,Qt::AlignCenter,QString::number(day.day())); painter->restore();
+    }
+};
+
+class ServiceReportDateEdit final : public QDateEdit {
+    QFrame *popup{}; ServiceReportCalendar *calendar{}; QComboBox *month{}; QSpinBox *year{};
+public:
+    explicit ServiceReportDateEdit(QWidget *parent=nullptr):QDateEdit(QDate::currentDate(),parent) {
+        setLocale(QLocale(QLocale::English,QLocale::UnitedStates)); setDisplayFormat("ddd, dd MMM yyyy"); setDateRange(QDate(1900,1,1),QDate(2100,12,31));
+        setButtonSymbols(QAbstractSpinBox::NoButtons); setCursor(Qt::PointingHandCursor);
+        popup=new QFrame(this,Qt::Popup); popup->setObjectName("serviceReportCalendarPopup");
+        popup->setStyleSheet("QFrame#serviceReportCalendarPopup { background:white; border:1px solid #c9def7; border-radius:12px; } QCalendarWidget QAbstractItemView { background:white; selection-background-color:#0785ff; selection-color:white; }");
+        auto *box=new QVBoxLayout(popup); box->setContentsMargins(20,18,20,18); box->setSpacing(14);
+        auto *title=new QLabel("Choose report date"); title->setProperty("role","detailTitle"); box->addWidget(title);
+        auto *hint=new QLabel("Choose a month and year, then select a day."); hint->setProperty("role","smallMuted"); box->addWidget(hint);
+        auto *navigation=new QHBoxLayout; auto *previous=new QToolButton; previous->setText("‹"); previous->setAccessibleName("Previous month");
+        month=new Selector; month->setObjectName("serviceReportCalendarMonth"); for(int i=1;i<=12;++i) month->addItem(QLocale(QLocale::English).monthName(i));
+        year=new QSpinBox; year->setObjectName("serviceReportCalendarYear"); year->setRange(1900,2100); year->setFixedWidth(94); year->setAlignment(Qt::AlignCenter);
+        auto *next=new QToolButton; next->setText("›"); next->setAccessibleName("Next month");
+        previous->setFixedWidth(34); next->setFixedWidth(34); previous->setStyleSheet("padding:0;font-size:22px;"); next->setStyleSheet("padding:0;font-size:22px;");
+        for(QWidget *w:QList<QWidget *>{previous,month,year,next}) { w->setMinimumHeight(40); w->setCursor(Qt::PointingHandCursor); }
+        navigation->addWidget(previous); navigation->addWidget(month,1); navigation->addWidget(year); navigation->addWidget(next); box->addLayout(navigation);
+        calendar=new ServiceReportCalendar; calendar->setObjectName("serviceReportCalendar"); calendar->setNavigationBarVisible(false); calendar->setLocale(QLocale(QLocale::English)); calendar->setFirstDayOfWeek(Qt::Monday); calendar->setVerticalHeaderFormat(QCalendarWidget::NoVerticalHeader);
+        QTextCharFormat weekday; weekday.setForeground(navy); weekday.setBackground(QColor("#eef6ff")); QTextCharFormat weekend=weekday; weekend.setForeground(QColor("#c83c4d"));
+        for(Qt::DayOfWeek day:{Qt::Monday,Qt::Tuesday,Qt::Wednesday,Qt::Thursday,Qt::Friday}) calendar->setWeekdayTextFormat(day,weekday);
+        calendar->setWeekdayTextFormat(Qt::Saturday,weekend); calendar->setWeekdayTextFormat(Qt::Sunday,weekend); calendar->setDateRange(minimumDate(),maximumDate()); calendar->setFixedSize(350,280); box->addWidget(calendar);
+        auto *footer=new QHBoxLayout; auto *todayLabel=new QLabel(QDate::currentDate().toString("dd MMM yyyy")); todayLabel->setProperty("role","smallMuted"); auto *today=button("Today","",true); today->setMinimumHeight(38); footer->addWidget(todayLabel); footer->addStretch(); footer->addWidget(today); box->addLayout(footer);
+        QObject::connect(month,&QComboBox::currentIndexChanged,popup,[this](int value){calendar->setCurrentPage(year->value(),value+1);});
+        QObject::connect(year,&QSpinBox::valueChanged,popup,[this](int value){calendar->setCurrentPage(value,month->currentIndex()+1);});
+        QObject::connect(calendar,&QCalendarWidget::currentPageChanged,popup,[this](int y,int m){QSignalBlocker a(month),b(year);month->setCurrentIndex(m-1);year->setValue(y);});
+        QObject::connect(previous,&QToolButton::clicked,calendar,&QCalendarWidget::showPreviousMonth); QObject::connect(next,&QToolButton::clicked,calendar,&QCalendarWidget::showNextMonth);
+        QObject::connect(calendar,&QCalendarWidget::clicked,this,[this](const QDate &value){setDate(value);popup->hide();setFocus();}); QObject::connect(calendar,&QCalendarWidget::activated,this,[this](const QDate &value){setDate(value);popup->hide();});
+        QObject::connect(today,&QPushButton::clicked,this,[this]{setDate(QDate::currentDate());popup->hide();});
+    }
+    void openCalendar() {
+        calendar->setSelectedDate(date()); calendar->setCurrentPage(date().year(),date().month()); { QSignalBlocker a(month),b(year); month->setCurrentIndex(date().month()-1); year->setValue(date().year()); }
+        popup->adjustSize(); const QRect available=screen()->availableGeometry(); QPoint position=mapToGlobal(QPoint(width()-popup->width(),height()+6)); position.setX(qBound(available.left(),position.x(),qMax(available.left(),available.right()-popup->width()))); if(position.y()+popup->height()>available.bottom()) position.setY(mapToGlobal(QPoint(0,-popup->height()-6)).y()); popup->move(position); popup->show(); calendar->setFocus();
+    }
+protected:
+    void mousePressEvent(QMouseEvent *event) override { if(event->button()==Qt::LeftButton) {openCalendar();event->accept();} else QDateEdit::mousePressEvent(event); }
+    void keyPressEvent(QKeyEvent *event) override { if(event->key()==Qt::Key_F4 || (event->key()==Qt::Key_Down && event->modifiers().testFlag(Qt::AltModifier))) {openCalendar();event->accept();} else QDateEdit::keyPressEvent(event); }
+};
+
 class Glyph final : public QWidget {
     QString name; QColor color; bool bubble;
 public:
@@ -183,42 +234,83 @@ public:
 protected:
     void paintEvent(QPaintEvent *) override {
         QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
-        if(bubble) { QColor bg=color; bg.setAlpha(22); p.setPen(Qt::NoPen); p.setBrush(bg); p.drawEllipse(rect()); }
+        if(bubble) { QColor bg=color; bg.setAlpha(22); p.setPen(AppTheme::pen(p, Qt::NoPen)); p.setBrush(AppTheme::brush(p, bg)); p.drawEllipse(rect()); }
         qreal margin=bubble?width()*.25:2; p.translate(margin,margin); p.scale((width()-2*margin)/24.0,(height()-2*margin)/24.0); symbol(p,name,color);
     }
 };
 
 class Sidebar final : public QWidget {
-    QPixmap photo{":/assets/backgrounds/services_alps.png"};
+
+    std::function<void(const QString &)> navigate;
+    QStringList navigationNames;
+    QList<QPushButton *> navigationButtons;
 public:
-    Sidebar() {
+    explicit Sidebar(std::function<void(const QString &)> onNavigate = {}, const QString &initialSection = "Services")
+        : navigate(std::move(onNavigate)) {
         setObjectName("servicesSidebar"); setFixedWidth(270);
         auto *column=new QVBoxLayout(this); column->setContentsMargins(10,20,10,18); column->setSpacing(4);
-        auto *dots=new QLabel("<span style='color:#ff4854'>●</span> &nbsp;<span style='color:#ffbd35'>●</span> &nbsp;<span style='color:#20c777'>●</span>");
-        dots->setStyleSheet("font-size:15px"); column->addWidget(dots);
         auto *brand=new QLabel; brand->setObjectName("sidebarBrand"); brand->setFixedSize(250,98);
         brand->setPixmap(QPixmap(":/assets/logo/skysense_logo.png").scaled(244,88,Qt::KeepAspectRatio,Qt::SmoothTransformation));
-        brand->setAlignment(Qt::AlignCenter); column->addWidget(brand); column->addSpacing(15);
+        brand->setAlignment(Qt::AlignCenter);
+        auto *brandGlow=new QGraphicsDropShadowEffect(brand);
+        brandGlow->setBlurRadius(20); brandGlow->setOffset(0,2); brandGlow->setColor(QColor(25,150,255,105));
+        brand->setGraphicsEffect(brandGlow);
+        column->addWidget(brand); column->addSpacing(15);
         const QStringList names{"Dashboard","Stations","Equipment","Maintenance","Staff","Services"};
+        navigationNames=names;
         const QStringList icons{"home","pin","equipment","tool","people","grid"};
         for(int i=0;i<names.size();++i) {
-            auto *nav=button(names[i],icons[i]); nav->setProperty("nav",true); nav->setProperty("active",i==5);
+            auto *nav=button(names[i],icons[i]); nav->setProperty("nav",true); nav->setProperty("active",names[i]==initialSection);
             nav->setIcon(icon(icons[i],QColor("#e4f3ff"))); nav->setIconSize(QSize(25,25)); nav->setFixedHeight(50); column->addWidget(nav);
+            navigationButtons.append(nav);
+            QObject::connect(nav,&QPushButton::clicked,this,[this,i]() {
+                for(int index=0;index<navigationButtons.size();++index) {
+                    navigationButtons[index]->setProperty("active",index==i);
+                    navigationButtons[index]->style()->unpolish(navigationButtons[index]);
+                    navigationButtons[index]->style()->polish(navigationButtons[index]);
+                }
+                if(navigate) navigate(navigationNames.value(i));
+            });
         }
         column->addStretch();
+        auto *themeRow = new QHBoxLayout;
+        themeRow->setContentsMargins(16, 12, 16, 10);
+        auto *workspaceTheme = new ThemeSwitch(this);
+        workspaceTheme->setObjectName("workspaceThemeSwitch");
+        themeRow->addWidget(workspaceTheme); themeRow->addStretch();
+        column->addLayout(themeRow);
         auto *statusBox=new QVBoxLayout; statusBox->setContentsMargins(16,12,4,0); statusBox->setSpacing(5);
         statusBox->addWidget(text("System Status","sidebarStatus"));
+        const bool oracleConnected = QSqlDatabase::database().isOpen();
         auto *statusRow=new QHBoxLayout; auto *dot=text(QString::fromUtf8("●"),"greenDot"); dot->setFixedWidth(16);
-        statusRow->addWidget(dot); statusRow->addWidget(text("All Systems Operational","sidebarStatus")); statusBox->addLayout(statusRow);
-        statusBox->addWidget(text("Last updated: Apr 24, 2025 10:42","sidebarMuted"));
+        dot->setStyleSheet(oracleConnected ? "color: #00c778;" : "color: #ff6b6b;");
+        if (oracleConnected) {
+            auto *pulse = new QGraphicsOpacityEffect(dot); pulse->setOpacity(1.0); dot->setGraphicsEffect(pulse);
+            auto *pulseAnimation = new QPropertyAnimation(pulse,"opacity",dot); pulseAnimation->setDuration(1050);
+            pulseAnimation->setStartValue(1.0); pulseAnimation->setKeyValueAt(0.5,0.42); pulseAnimation->setEndValue(1.0);
+            pulseAnimation->setLoopCount(-1); pulseAnimation->start();
+        }
+        statusRow->addWidget(dot);
+        statusRow->addWidget(text(oracleConnected ? "Oracle connected" : "Oracle disconnected","sidebarStatus"));
+        statusBox->addLayout(statusRow);
+        statusBox->addWidget(text("Last checked: " + QDateTime::currentDateTime().toString("dd MMM yyyy HH:mm"),"sidebarMuted"));
         auto *status=new QWidget; status->setLayout(statusBox); column->addWidget(status);
     }
 protected:
     void paintEvent(QPaintEvent *) override {
-        QPainter p(this); p.fillRect(rect(),QColor("#071a33")); p.setRenderHint(QPainter::SmoothPixmapTransform);
-        QRectF area(0,height()*.35,width(),height()*.65); QSizeF size=photo.size(); size.scale(area.size(),Qt::KeepAspectRatioByExpanding);
-        p.save(); p.setClipRect(area); p.drawPixmap(QRectF((width()-size.width())*.15,area.top()+(area.height()-size.height())/2,size.width(),size.height()),photo,photo.rect()); p.restore();
-        QLinearGradient g(0,area.top(),0,height()); g.setColorAt(0,QColor(7,26,51,255)); g.setColorAt(.34,QColor(7,26,51,100)); g.setColorAt(.7,QColor(7,26,51,22)); g.setColorAt(1,QColor(7,26,51,225)); p.fillRect(area,g);
+        QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
+        QLinearGradient base(0,0,width(),height());
+        base.setColorAt(0,QColor("#091c35"));base.setColorAt(.6,QColor("#102b49"));base.setColorAt(1,QColor("#071629"));
+        p.fillRect(rect(),base);
+        const QPointF center(width()*.84,height()*.7);
+        QRadialGradient aura(center,width()*1.15);
+        aura.setColorAt(0,QColor(20,156,195,45));aura.setColorAt(1,Qt::transparent);p.fillRect(rect(),aura);
+        p.save();p.setClipRect(QRectF(0,height()*.56,width(),height()*.25));
+        p.translate(center);p.rotate(-24);p.setBrush(Qt::NoBrush);
+        for(int i=0;i<6;++i){p.setPen(QPen(QColor(101,215,238,18+i*3),.8));p.drawEllipse(QPointF(),70+i*24,26+i*12);}
+        p.restore();
+        p.setPen(QPen(QColor(121,188,224,35),1));p.drawLine(width()-1,0,width()-1,height());
+        QLinearGradient footer(0,height()-175,0,height());footer.setColorAt(0,Qt::transparent);footer.setColorAt(1,QColor(3,13,29,180));p.fillRect(rect(),footer);
     }
 };
 
@@ -234,20 +326,21 @@ QWidget *metricCard(const QString &title,const QString &value,const QString &tot
     row->addLayout(copy,1); row->addWidget(new Glyph("chart",accent,30),0,Qt::AlignVCenter); return f;
 }
 
-struct ServiceRecord {
-    QString id, title, type, stationCode, stationName, assignee, date, startTime, endTime, priority, status;
-    QString description;
-    QStringList checklist;
-};
+// ServiceRecord now lives in servicemodel.h (shared with the Oracle model).
 
-QVector<ServiceRecord> serviceRecords{
-    {"SRV-001","Routine Maintenance","Maintenance","ALP-03","Alpine Ridge","James Wilson","Apr 24, 2025","09:00","12:00","High","In Progress",{},{}},
-    {"SRV-002","Sensor Calibration","Calibration","COA-01","Coastal Bay","Sophie Chen","Apr 24, 2025","12:30","15:00","Medium","Scheduled",{},{}},
-    {"SRV-003","Camera Inspection","Inspection","FOR-12","Pine Forest","Miguel Santos","Apr 25, 2025","09:00","12:00","Low","Completed",{},{}},
-    {"SRV-004","Weather Station Repair","Repair","VAL-07","Green Valley","Emma Davis","Apr 25, 2025","14:00","17:00","High","Overdue",{},{}},
-    {"SRV-005","Data Connectivity Check","Connectivity","ALP-03","Alpine Ridge","Ryan Kim","Apr 25, 2025","10:00","12:00","Medium","Scheduled",{},{}},
-    {"SRV-006","Software Update","Software","DES-05","Desert View","Olivia Martinez","Apr 26, 2025","13:00","16:00","Low","Scheduled",{},{}}
-};
+QVector<ServiceRecord> serviceRecords;
+
+struct ServiceStationChoice { int id=0; QString code,name; };
+struct ServicePersonChoice { int id=0; QString name; };
+QVector<ServiceStationChoice> serviceStationChoices;
+QVector<ServicePersonChoice> servicePersonChoices;
+int minutesBetween(const QString &from,const QString &to);
+
+
+
+
+
+
 
 QString nextServiceId()
 {
@@ -258,6 +351,217 @@ QString nextServiceId()
         if(ok) next=qMax(next,number+1);
     }
     return QString("SRV-%1").arg(next,3,10,QChar('0'));
+}
+
+QString serviceLoadError;   // filled when the Oracle SELECT fails (shown once on the Services page)
+
+// Loads the Services list from Oracle (table SKYSENSE_SERVICES).
+// Demo rows are used ONLY when Oracle is not connected (--skip-oracle) and are never written to the database.
+void initialiseServiceData()
+{
+    serviceStationChoices={{1,"ALP-03","Alpine Ridge"},{2,"COA-01","Coastal Bay"},{3,"FOR-12","Pine Forest"},{4,"VAL-07","Green Valley"},{5,"DES-05","Desert View"}};
+    servicePersonChoices={{1,"Alex Martin"},{2,"Sophie Chen"},{3,"James Wilson"},{4,"Emma Davis"},{5,"Ryan Kim"}};
+    serviceRecords.clear(); serviceLoadError.clear();
+    if(QSqlDatabase::database().isOpen()) {
+        QVector<ServiceRecord> loaded;
+        if(ServiceModel().loadAll(loaded,&serviceLoadError)) serviceRecords=loaded;
+        return;
+    }
+    auto addDemoService=[](const QString &id,const QString &title,const QString &type,int stationIndex,int personIndex,
+                           const QString &date,const QString &priority,const QString &status,double price) {
+        ServiceRecord record;
+        record.id=id; record.title=title; record.type=type;
+        const auto station=serviceStationChoices.at(stationIndex); const auto person=servicePersonChoices.at(personIndex);
+        record.stationCode=station.code; record.stationName=station.name; record.stationId=station.id;
+        record.assignee=person.name; record.personnelId=person.id;
+        record.date=date; record.startTime="09:00"; record.endTime="12:00";
+        record.priority=priority; record.status=status; record.quantity=1; record.unitPrice=price;
+        record.description=title+" at "+station.name;
+        record.checklist={"Inspect equipment","Check communication","Validate readings"};
+        record.checklistDone={status=="Completed",status=="Completed",status=="Completed"};
+        if(status=="Completed") record.actualEndTime="11:30";
+        serviceRecords.append(record);
+    };
+    addDemoService("SRV-001","Routine Maintenance","Maintenance",0,2,"Oct 20, 2026","High","In Progress",150);
+    addDemoService("SRV-002","Sensor Calibration","Calibration",1,1,"Oct 21, 2026","Medium","Scheduled",95);
+    addDemoService("SRV-003","Camera Inspection","Inspection",2,0,"Oct 18, 2026","Low","Completed",80);
+    addDemoService("SRV-004","Weather Station Repair","Repair",3,3,"Oct 16, 2026","High","Overdue",220);
+    addDemoService("SRV-005","Data Connectivity Check","Connectivity",0,4,"Oct 22, 2026","Medium","Scheduled",70);
+}
+
+
+// ---- Shared helpers for the two innovative métiers (history reuse + performance) ----
+int minutesBetween(const QString &from,const QString &to)
+{
+    const QTime a=QTime::fromString(from,"HH:mm"), b=QTime::fromString(to,"HH:mm");
+    return (a.isValid()&&b.isValid())?a.secsTo(b)/60:0;
+}
+int plannedMinutes(const ServiceRecord &r) { return minutesBetween(r.startTime,r.endTime); }
+int actualMinutes(const ServiceRecord &r) { return r.actualEndTime.isEmpty()?-1:minutesBetween(r.startTime,r.actualEndTime); }
+QString durationText(int minutes)
+{
+    const int m=qAbs(minutes);
+    return QString("%1 h %2").arg(m/60).arg(m%60,2,10,QChar('0'));
+}
+QString gapText(int minutes) { return QString("%1%2 min").arg(minutes>0?"+":minutes<0?"-":"").arg(qAbs(minutes)); }
+
+// I2 — a service is late if it is Overdue, or Completed after its planned end time.
+bool finishedLate(const ServiceRecord &r)
+{
+    return r.status=="Overdue" || (r.status=="Completed" && actualMinutes(r)>plannedMinutes(r));
+}
+struct PerformanceStats { int completed=0, overdue=0, onTime=0, measured=0, plannedSum=0, actualSum=0; };
+PerformanceStats performanceFor(const QString &type=QString())
+{
+    PerformanceStats s;
+    for(const auto &r:serviceRecords) {
+        if(!type.isEmpty() && r.type!=type) continue;
+        if(r.status=="Overdue") ++s.overdue;
+        else if(r.status=="Completed") {
+            ++s.completed;
+            if(!finishedLate(r)) ++s.onTime;
+            if(actualMinutes(r)>=0) { ++s.measured; s.plannedSum+=plannedMinutes(r); s.actualSum+=actualMinutes(r); }
+        }
+    }
+    return s;
+}
+// On-time rate = completed on time / (completed + overdue). Returns -1 when there is nothing to measure.
+int onTimeRate(const PerformanceStats &s)
+{
+    const int total=s.completed+s.overdue;
+    return total>0?qRound(100.0*s.onTime/total):-1;
+}
+
+bool writeServicesPdf(const QString &path,const QVector<ServiceRecord> &records,QString *error,const QDate &reportDate=QDate::currentDate())
+{
+    if(records.isEmpty()) {
+        if(error) *error="There are no visible services to export.";
+        return false;
+    }
+
+    QPdfWriter pdf(path);
+    pdf.setTitle("SkySense services report");
+    pdf.setCreator("SkySense Smart Weather Management");
+    pdf.setResolution(144);
+    pdf.setPageSize(QPageSize(QPageSize::A4));
+    pdf.setPageOrientation(QPageLayout::Landscape);
+    pdf.setPageMargins(QMarginsF(12,12,12,12),QPageLayout::Millimeter);
+
+    QPainter painter(&pdf);
+    if(!painter.isActive()) {
+        if(error) *error="The PDF file could not be created at the selected location.";
+        return false;
+    }
+
+    const QColor dark("#091b40"),secondary("#5d77ad"),line("#dfe9f6"),surface("#f5f9ff"),accent("#0785ff");
+    const QRect page=pdf.pageLayout().paintRectPixels(pdf.resolution());
+    const int contentLeft=page.left(),contentRight=page.right(),contentWidth=page.width();
+    const int footerHeight=34,rowHeight=54,headerRowHeight=42;
+    int pageNumber=1,y=0;
+
+    auto useFont=[&](int pixels,QFont::Weight weight=QFont::Normal,const QColor &color=QColor("#091b40")) {
+        QFont font("Segoe UI"); font.setPixelSize(pixels); font.setWeight(weight); painter.setFont(font); painter.setPen(AppTheme::pen(painter, color));
+    };
+    auto footer=[&] {
+        painter.setPen(AppTheme::pen(painter, line)); painter.drawLine(contentLeft,page.bottom()-footerHeight,contentRight,page.bottom()-footerHeight);
+        useFont(11,QFont::Normal,secondary);
+        painter.drawText(QRect(contentLeft,page.bottom()-footerHeight+8,contentWidth,20),Qt::AlignLeft|Qt::AlignVCenter,
+                         "SkySense • Smart Weather Management");
+        painter.drawText(QRect(contentLeft,page.bottom()-footerHeight+8,contentWidth,20),Qt::AlignRight|Qt::AlignVCenter,
+                         QString("Page %1").arg(pageNumber));
+    };
+    auto reportHeader=[&](bool includeSummary) {
+        painter.fillRect(page,AppTheme::brush(painter, Qt::white));
+        QPixmap logo(":/assets/logo/skysense_logo.png");
+        if(!logo.isNull()) painter.drawPixmap(QRect(contentLeft,y,190,66),logo.scaled(190,66,Qt::KeepAspectRatio,Qt::SmoothTransformation));
+        useFont(25,QFont::Bold,dark);
+        painter.drawText(QRect(contentLeft+215,y+2,contentWidth-215,34),Qt::AlignLeft|Qt::AlignVCenter,"Services Operations Report");
+        useFont(12,QFont::Normal,secondary);
+        painter.drawText(QRect(contentLeft+215,y+38,contentWidth-215,22),Qt::AlignLeft|Qt::AlignVCenter,
+                          QString("Report date %1 • %2 service records").arg(QLocale(QLocale::English).toString(reportDate,"dd MMMM yyyy")).arg(records.size()));
+        y+=78; painter.fillRect(QRect(contentLeft,y,contentWidth,3),AppTheme::brush(painter, accent)); y+=18;
+        if(includeSummary) {
+            const QStringList labels{"Total","Scheduled","In Progress","Completed","Overdue"};
+            QVector<int> values{int(records.size()),0,0,0,0};
+            for(const auto &record:records) {
+                if(record.status=="Scheduled") ++values[1];
+                else if(record.status=="In Progress") ++values[2];
+                else if(record.status=="Completed") ++values[3];
+                else if(record.status=="Overdue") ++values[4];
+            }
+            const int gap=12,cardWidth=(contentWidth-gap*4)/5;
+            for(int i=0;i<labels.size();++i) {
+                const QRect card(contentLeft+i*(cardWidth+gap),y,cardWidth,70);
+                painter.setPen(AppTheme::pen(painter, QPen(line,1))); painter.setBrush(AppTheme::brush(painter, i==0?QColor("#eef7ff"):surface)); painter.drawRoundedRect(card,10,10);
+                useFont(12,QFont::DemiBold,secondary); painter.drawText(card.adjusted(14,8,-10,-36),Qt::AlignLeft|Qt::AlignVCenter,labels[i]);
+                useFont(24,QFont::Bold,i==0?accent:dark); painter.drawText(card.adjusted(14,30,-10,-5),Qt::AlignLeft|Qt::AlignVCenter,QString::number(values[i]));
+            }
+            y+=86;
+            int completed=0, checklistTasks=0, late=0;
+            for(const auto &record:records) {
+                if(record.status=="Completed") ++completed;
+                checklistTasks+=record.checklist.size();
+                if(finishedLate(record)) ++late;
+            }
+            const QRect summary(contentLeft,y,contentWidth,48);
+            painter.setPen(AppTheme::pen(painter, QPen(line,1))); painter.setBrush(AppTheme::brush(painter, QColor("#f8fbff"))); painter.drawRoundedRect(summary,8,8);
+            useFont(12,QFont::DemiBold,dark); painter.drawText(summary.adjusted(14,5,-14,-25),Qt::AlignLeft|Qt::AlignVCenter,"Completion summary");
+            useFont(11,QFont::Normal,secondary);
+            painter.drawText(summary.adjusted(14,23,-14,-4),Qt::AlignLeft|Qt::AlignVCenter,
+                QString("%1 of %2 services completed • %3 local checklist task%4 • %5 late service%6")
+                    .arg(completed).arg(records.size()).arg(checklistTasks).arg(checklistTasks==1?"":"s")
+                    .arg(late).arg(late==1?"":"s"));
+            y+=60;
+        }
+    };
+
+    const QStringList headings{"ID","Service","Type","Station","Assignee","Schedule","Priority","Status"};
+    const QVector<int> weights{7,20,11,13,14,16,8,11};
+    QVector<int> widths; int used=0;
+    for(int i=0;i<weights.size();++i) {
+        const int width=i==weights.size()-1?contentWidth-used:contentWidth*weights[i]/100;
+        widths.append(width); used+=width;
+    }
+    auto tableHeader=[&] {
+        int x=contentLeft; painter.fillRect(QRect(contentLeft,y,contentWidth,headerRowHeight),AppTheme::brush(painter, QColor("#eaf4ff")));
+        useFont(12,QFont::DemiBold,dark);
+        for(int i=0;i<headings.size();++i) {
+            painter.drawText(QRect(x+8,y,widths[i]-16,headerRowHeight),Qt::AlignLeft|Qt::AlignVCenter,headings[i]);
+            x+=widths[i];
+        }
+        y+=headerRowHeight;
+    };
+
+    y=page.top(); reportHeader(true); tableHeader();
+    for(int index=0;index<records.size();++index) {
+        if(y+rowHeight>page.bottom()-footerHeight-8) {
+            footer(); pdf.newPage(); ++pageNumber; y=page.top(); reportHeader(false); tableHeader();
+        }
+        const auto &record=records[index];
+        if(index%2) painter.fillRect(QRect(contentLeft,y,contentWidth,rowHeight),AppTheme::brush(painter, QColor("#f8fbff")));
+        painter.setPen(AppTheme::pen(painter, line)); painter.drawLine(contentLeft,y+rowHeight,contentRight,y+rowHeight);
+        const QStringList values{
+            record.id,record.title,record.type,record.stationCode+"\n"+record.stationName,record.assignee,
+            record.date+"\n"+record.startTime+" – "+record.endTime,record.priority,record.status
+        };
+        int x=contentLeft; useFont(11,QFont::Normal,dark);
+        for(int column=0;column<values.size();++column) {
+            QFont font=painter.font(); font.setBold(column==0||column==1); painter.setFont(font);
+            QColor valueColor=dark;
+            if(column==6) valueColor=record.priority=="High"?QColor("#d9363e"):record.priority=="Medium"?QColor("#b77900"):QColor("#168653");
+            if(column==7) valueColor=record.status=="Overdue"?QColor("#d9363e"):record.status=="Completed"?QColor("#168653"):QColor("#246ec5");
+            painter.setPen(AppTheme::pen(painter, valueColor));
+            painter.drawText(QRect(x+8,y+5,widths[column]-16,rowHeight-10),Qt::AlignLeft|Qt::AlignVCenter|Qt::TextWordWrap,values[column]);
+            x+=widths[column];
+        }
+        y+=rowHeight;
+    }
+    footer(); painter.end();
+    if(!QFileInfo::exists(path)||QFileInfo(path).size()==0) {
+        if(error) *error="The PDF writer did not produce a valid file.";
+        return false;
+    }
+    return true;
 }
 
 QString glyphForType(const QString &type)
@@ -272,8 +576,10 @@ QString glyphForType(const QString &type)
 
 class ServiceDelegate final : public QStyledItemDelegate {
     QVector<qreal> rowOpacity;
+    qreal pulseLevel=1.0;
 public:
     explicit ServiceDelegate(QObject *parent=nullptr):QStyledItemDelegate(parent),rowOpacity(serviceRecords.size(),1.0) {}
+    void setPulseLevel(qreal value) { pulseLevel=value; }
     void setRowOpacity(int row,qreal opacity) {
         if(row>=rowOpacity.size()) rowOpacity.resize(row+1,1.0);
         rowOpacity[row]=opacity;
@@ -284,11 +590,11 @@ public:
         const bool checked=index.siblingAtColumn(0).data(Qt::CheckStateRole).toInt()==Qt::Checked;
         const ServiceRecord &record=serviceRecords[row];
         const bool hovered=(o.state & QStyle::State_MouseOver) && !checked;
-        p->fillRect(r,checked?QColor("#e5f4ff"):hovered?QColor("#f2f8ff"):Qt::white); p->setPen(QColor("#e5eef9")); p->drawLine(r.bottomLeft(),r.bottomRight());
-        QFont font("Segoe UI"); font.setPixelSize(13); p->setFont(font); p->setPen(navy);
+        p->fillRect(r,AppTheme::brush(*p, checked?QColor("#e5f4ff"):hovered?QColor("#f2f8ff"):Qt::white)); p->setPen(AppTheme::pen(*p, QColor("#e5eef9"))); p->drawLine(r.bottomLeft(),r.bottomRight());
+        QFont font("Segoe UI"); font.setPixelSize(13); p->setFont(font); p->setPen(AppTheme::pen(*p, navy));
         if(col==0) {
-            if(checked) p->fillRect(QRect(r.left(),r.top(),3,r.height()),blue);
-            QRectF box(r.center().x()-8,r.center().y()-8,16,16); p->setPen(QPen(checked?blue:QColor("#8ca7d3"),1.3)); p->setBrush(checked?blue:Qt::white); p->drawRoundedRect(box,3,3);
+            if(checked) p->fillRect(QRect(r.left(),r.top(),3,r.height()),AppTheme::brush(*p, blue));
+            QRectF box(r.center().x()-8,r.center().y()-8,16,16); p->setPen(AppTheme::pen(*p, QPen(checked?blue:QColor("#8ca7d3"),1.3))); p->setBrush(AppTheme::brush(*p, checked?blue:Qt::white)); p->drawRoundedRect(box,3,3);
             if(checked) { p->translate(box.topLeft()); p->scale(16.0/24,16.0/24); symbol(*p,"check",Qt::white); }
         } else if(col==1) {
             font.setBold(true); p->setFont(font); p->drawText(r.adjusted(9,0,-3,0),Qt::AlignVCenter,record.id);
@@ -296,27 +602,33 @@ public:
             p->save(); p->translate(r.left()+8,r.center().y()-11); symbol(*p,glyphForType(record.type),blue); p->restore();
             font.setBold(true); p->setFont(font); p->drawText(r.adjusted(39,0,-4,0),Qt::AlignVCenter,record.title);
         } else if(col==3) {
-            p->setPen(muted); p->drawText(r.adjusted(8,0,-3,0),Qt::AlignVCenter,record.type);
+            p->setPen(AppTheme::pen(*p, muted)); p->drawText(r.adjusted(8,0,-3,0),Qt::AlignVCenter,record.type);
         } else if(col==4) {
             font.setBold(true); p->setFont(font); p->drawText(r.adjusted(8,3,-3,-r.height()/2+2),Qt::AlignVCenter,record.stationCode);
-            font.setBold(false); p->setFont(font); p->setPen(muted); p->drawText(r.adjusted(8,r.height()/2-1,-3,-3),Qt::AlignVCenter,record.stationName);
+            font.setBold(false); p->setFont(font); p->setPen(AppTheme::pen(*p, muted)); p->drawText(r.adjusted(8,r.height()/2-1,-3,-3),Qt::AlignVCenter,record.stationName);
         } else if(col==5) {
             const QString initials=record.assignee.split(' ').value(0).left(1)+record.assignee.split(' ').value(1).left(1);
-            QColor avatar[]={QColor("#e3efff"),QColor("#fbe9e1"),QColor("#e8e4fb"),QColor("#f8e9f0"),QColor("#e5f5ec"),QColor("#f2eddf")};
-            p->setPen(Qt::NoPen); p->setBrush(avatar[row]); p->drawEllipse(QRectF(r.left()+7,r.center().y()-13,26,26));
-            p->setPen(QColor("#28517c")); p->drawText(QRectF(r.left()+7,r.center().y()-13,26,26),Qt::AlignCenter,initials);
-            p->setPen(navy); p->drawText(r.adjusted(39,0,-2,0),Qt::AlignVCenter,record.assignee);
+            const QColor avatar[]={QColor("#e3efff"),QColor("#fbe9e1"),QColor("#e8e4fb"),QColor("#f8e9f0"),QColor("#e5f5ec"),QColor("#f2eddf")};
+            p->setPen(AppTheme::pen(*p, Qt::NoPen)); p->setBrush(AppTheme::brush(*p, avatar[row%6])); p->drawEllipse(QRectF(r.left()+7,r.center().y()-13,26,26));
+            p->setPen(AppTheme::pen(*p, QColor("#28517c"))); p->drawText(QRectF(r.left()+7,r.center().y()-13,26,26),Qt::AlignCenter,initials);
+            p->setPen(AppTheme::pen(*p, navy)); p->drawText(r.adjusted(39,0,-2,0),Qt::AlignVCenter,record.assignee);
         } else if(col==6) {
             p->save(); p->translate(r.left()+7,r.center().y()-10); symbol(*p,"calendar",muted); p->restore();
-            p->setPen(muted); p->drawText(r.adjusted(34,3,-2,-r.height()/2+1),Qt::AlignVCenter,record.date);
+            p->setPen(AppTheme::pen(*p, muted)); p->drawText(r.adjusted(34,3,-2,-r.height()/2+1),Qt::AlignVCenter,record.date);
             p->drawText(r.adjusted(34,r.height()/2-1,-2,-3),Qt::AlignVCenter,record.startTime+" - "+record.endTime);
         } else if(col==7 || col==8) {
             const QString value=col==7?record.priority:record.status; QColor bg,fg;
             if(col==7) { bg=value=="High"?QColor("#fde5e6"):value=="Medium"?QColor("#fff1d4"):QColor("#e5f8ed"); fg=value=="High"?QColor("#dc4551"):value=="Medium"?QColor("#bb8113"):QColor("#23985d"); }
             else { bg=value=="Completed"?QColor("#ddf7e9"):value=="Overdue"?QColor("#ffe4e7"):value=="In Progress"?QColor("#e4f1ff"):QColor("#e9f3ff"); fg=value=="Completed"?QColor("#13834f"):value=="Overdue"?QColor("#d34756"):QColor("#2474c6"); }
-            QRectF badge(r.left()+4,r.center().y()-13,r.width()-8,26); p->setPen(Qt::NoPen); p->setBrush(bg); p->drawRoundedRect(badge,13,13); p->setPen(fg); p->drawText(badge,Qt::AlignCenter,value);
+            QRectF badge(r.left()+4,r.center().y()-13,r.width()-8,26);
+            if(col==8) {
+                QColor halo=fg; halo.setAlpha(qRound(7+40*pulseLevel));
+                p->setPen(AppTheme::pen(*p, Qt::NoPen)); p->setBrush(AppTheme::brush(*p, halo));
+                p->drawRoundedRect(badge.adjusted(-2,-2,2,2),15,15);
+            }
+            p->setPen(AppTheme::pen(*p, Qt::NoPen)); p->setBrush(AppTheme::brush(*p, bg)); p->drawRoundedRect(badge,13,13); p->setPen(AppTheme::pen(*p, fg)); p->drawText(badge,Qt::AlignCenter,value);
         } else {
-            p->setPen(Qt::NoPen); p->setBrush(navy); for(int i=-1;i<=1;++i) p->drawEllipse(QPointF(r.center().x()+i*7,r.center().y()),1.5,1.5);
+            p->setPen(AppTheme::pen(*p, Qt::NoPen)); p->setBrush(AppTheme::brush(*p, navy)); for(int i=-1;i<=1;++i) p->drawEllipse(QPointF(r.center().x()+i*7,r.center().y()),1.5,1.5);
         }
         p->restore();
     }
@@ -327,8 +639,8 @@ public:
     explicit ServiceHeader(QWidget *parent):QHeaderView(Qt::Horizontal,parent) {}
 protected:
     void paintSection(QPainter *p,const QRect &rect,int section) const override {
-        QHeaderView::paintSection(p,rect,section); p->save(); p->setRenderHint(QPainter::Antialiasing); p->setPen(QPen(QColor("#8aa6d2"),1.2));
-        if(section==0) { p->setBrush(Qt::white); p->drawRoundedRect(QRectF(rect.center().x()-8,rect.center().y()-8,16,16),3,3); }
+        QHeaderView::paintSection(p,rect,section); p->save(); p->setRenderHint(QPainter::Antialiasing); p->setPen(AppTheme::pen(*p, QPen(QColor("#8aa6d2"),1.2)));
+        if(section==0) { p->setBrush(AppTheme::brush(*p, Qt::white)); p->drawRoundedRect(QRectF(rect.center().x()-8,rect.center().y()-8,16,16),3,3); }
         else if(section>0 && section<9) { int x=rect.left()+fontMetrics().horizontalAdvance(model()->headerData(section,Qt::Horizontal).toString())+20; int y=rect.center().y(); p->drawLine(x,y-2,x+3,y-5); p->drawLine(x+3,y-5,x+6,y-2); p->drawLine(x,y+2,x+3,y+5); p->drawLine(x+3,y+5,x+6,y+2); }
         p->restore();
     }
@@ -336,6 +648,7 @@ protected:
 
 class ServiceTable final : public QTableWidget {
     std::function<void()> changeCallback;
+    QHash<int,bool> ascendingSort;
 public:
     ServiceTable():QTableWidget(serviceRecords.size(),10) {
         setObjectName("serviceTable"); setHorizontalHeader(new ServiceHeader(this)); viewport()->setMouseTracking(true); setMouseTracking(true);
@@ -344,6 +657,9 @@ public:
         horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed); setItemDelegate(new ServiceDelegate(this)); setShowGrid(false); setSelectionMode(QAbstractItemView::NoSelection); setEditTriggers(QAbstractItemView::NoEditTriggers); setFocusPolicy(Qt::NoFocus);
         setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff); setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         for(int r=0;r<serviceRecords.size();++r) populateRow(r);
+        connect(horizontalHeader(),&QHeaderView::sectionClicked,this,[this](int column) {
+            if(column>0 && column<9) sortRecords(column);
+        });
         connect(this,&QTableWidget::cellClicked,this,[this](int row,int column) {
             if(column!=0) return;
             auto *check=item(row,0);
@@ -352,6 +668,15 @@ public:
             viewport()->update();
         });
         setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed); setMinimumWidth(0);
+        auto *statusPulse=new QTimer(this);
+        statusPulse->setInterval(75);
+        connect(statusPulse,&QTimer::timeout,this,[this,phase=0.0]() mutable {
+            if(!isVisible()) return;
+            phase+=0.17;
+            static_cast<ServiceDelegate *>(itemDelegate())->setPulseLevel((1.0+qSin(phase))*0.5);
+            viewport()->update();
+        });
+        statusPulse->start();
     }
     void addService(const ServiceRecord &record) {
         serviceRecords.append(record);
@@ -371,6 +696,11 @@ public:
         return -1;
     }
     ServiceRecord serviceAt(int row) const { return serviceRecords.value(row); }
+    QVector<ServiceRecord> visibleServices() const {
+        QVector<ServiceRecord> visible;
+        for(int row=0;row<rowCount();++row) if(!isRowHidden(row)) visible.append(serviceRecords[row]);
+        return visible;
+    }
     void setChangeCallback(std::function<void()> callback) { changeCallback=std::move(callback); }
     int visibleServiceCount() const { int count=0; for(int row=0;row<rowCount();++row) if(!isRowHidden(row)) ++count; return count; }
     int serviceCount() const { return serviceRecords.size(); }
@@ -379,7 +709,7 @@ public:
         const QString needle=query.trimmed();
         for(int row=0;row<rowCount();++row) {
             const ServiceRecord &r=serviceRecords[row];
-            const QString haystack=(r.id+" "+r.title+" "+r.stationCode+" "+r.stationName+" "+r.assignee).toCaseFolded();
+            const QString haystack=(r.id+" "+r.title+" "+r.type+" "+r.status+" "+r.stationCode+" "+r.stationName+" "+r.assignee).toCaseFolded();
             const bool matchesText=needle.isEmpty() || haystack.contains(needle.toCaseFolded());
             const bool matchesType=type=="All Types" || r.type==type;
             const bool matchesStation=station=="All Stations" || r.stationCode==station;
@@ -423,9 +753,46 @@ public:
         updateHeight();
         viewport()->update(); if(changeCallback) changeCallback();
     }
+    void sortRecords(int column) {
+        const bool ascending=!ascendingSort.value(column,false);
+        ascendingSort[column]=ascending;
+        QSet<QString> checkedIds;
+        for(int row=0;row<rowCount();++row) {
+            if(auto *check=item(row,0); check && check->checkState()==Qt::Checked)
+                checkedIds.insert(serviceRecords[row].id);
+        }
+        auto priorityValue=[](const QString &priority) {
+            if(priority=="High") return 3;
+            if(priority=="Medium") return 2;
+            return 1;
+        };
+        auto lessForColumn=[column,priorityValue](const ServiceRecord &left,const ServiceRecord &right) {
+            switch(column) {
+            case 1: return left.id.compare(right.id,Qt::CaseInsensitive)<0;
+            case 2: return left.title.compare(right.title,Qt::CaseInsensitive)<0;
+            case 3: return left.type.compare(right.type,Qt::CaseInsensitive)<0;
+            case 4: return left.stationCode.compare(right.stationCode,Qt::CaseInsensitive)<0;
+            case 5: return left.assignee.compare(right.assignee,Qt::CaseInsensitive)<0;
+            case 6: return QDate::fromString(left.date,"MMM dd, yyyy")<QDate::fromString(right.date,"MMM dd, yyyy");
+            case 7: return priorityValue(left.priority)<priorityValue(right.priority);
+            case 8: return left.status.compare(right.status,Qt::CaseInsensitive)<0;
+            default: return false;
+            }
+        };
+        std::sort(serviceRecords.begin(),serviceRecords.end(),[&](const ServiceRecord &left,const ServiceRecord &right) {
+            return ascending ? lessForColumn(left,right) : lessForColumn(right,left);
+        });
+        clearContents();
+        for(int row=0;row<rowCount();++row) {
+            populateRow(row);
+            setRowHeight(row,42);
+            if(checkedIds.contains(serviceRecords[row].id)) item(row,0)->setCheckState(Qt::Checked);
+        }
+        if(changeCallback) changeCallback();
+    }
 protected:
     void resizeEvent(QResizeEvent *event) override {
-        QTableWidget::resizeEvent(event); const int widths[]{42,86,171,122,116,139,155,88,112,56};
+        QTableWidget::resizeEvent(event); const int widths[]{42,86,190,116,108,130,152,88,112,56};
         int total=0; for(int n:widths) total+=n; int extra=qMax(0,viewport()->width()-total);
         for(int c=0;c<10;++c) setColumnWidth(c,widths[c]+(c==2||c==4||c==5||c==6?extra/4:0));
         updateHeight();
@@ -447,6 +814,241 @@ private:
     }
 };
 
+struct ServiceChartItem { QString label; int value; QColor color; };
+
+class ServiceBarChart final : public QWidget {
+    QVector<ServiceChartItem> items;
+public:
+    explicit ServiceBarChart(QVector<ServiceChartItem> values, QWidget *parent=nullptr)
+        : QWidget(parent), items(std::move(values))
+    { setMinimumHeight(60+items.size()*44); setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding); }
+protected:
+    void paintEvent(QPaintEvent *) override {
+        QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
+        if(items.isEmpty()) return;
+        int total=0, maximum=1;
+        for(const auto &item:items) { total+=item.value; maximum=qMax(maximum,item.value); }
+        QFont labelFont("Segoe UI"); labelFont.setPixelSize(15); labelFont.setWeight(QFont::DemiBold);
+        QFont valueFont("Segoe UI"); valueFont.setPixelSize(16); valueFont.setWeight(QFont::Bold);
+        QFont percentFont("Segoe UI"); percentFont.setPixelSize(13);
+        int labelW=0; const QFontMetrics lm(labelFont);
+        for(const auto &item:items) labelW=qMax(labelW,lm.horizontalAdvance(item.label));
+        labelW+=14;
+        const int valueW=86, gap=10;
+        const int trackX=labelW+gap, trackW=qMax(40,width()-trackX-valueW-gap);
+        const int rowH=qBound(30,height()/items.size(),52), barH=qMin(24,rowH-12);
+        const int used=rowH*items.size(), top=qMax(0,(height()-used)/2);
+        for(int i=0;i<items.size();++i) {
+            const auto &item=items[i];
+            const int y=top+i*rowH, cy=y+rowH/2;
+            p.setFont(labelFont); p.setPen(AppTheme::pen(p, QColor("#17294f")));
+            p.drawText(QRect(0,y,labelW,rowH),Qt::AlignLeft|Qt::AlignVCenter,item.label);
+            const QRectF track(trackX,cy-barH/2.0,trackW,barH);
+            p.setPen(AppTheme::pen(p, Qt::NoPen)); p.setBrush(AppTheme::brush(p, QColor("#edf3fb"))); p.drawRoundedRect(track,barH/2.0,barH/2.0);
+            if(item.value>0) {
+                const qreal w=qMax<qreal>(barH,trackW*qreal(item.value)/maximum);
+                p.setBrush(AppTheme::brush(p, item.color)); p.drawRoundedRect(QRectF(trackX,track.top(),w,barH),barH/2.0,barH/2.0);
+            }
+            const int pct=total>0?qRound(100.0*item.value/total):0;
+            p.setFont(valueFont); p.setPen(AppTheme::pen(p, QColor("#0d2250")));
+            p.drawText(QRect(trackX+trackW+gap,y,32,rowH),Qt::AlignRight|Qt::AlignVCenter,QString::number(item.value));
+            p.setFont(percentFont); p.setPen(AppTheme::pen(p, QColor("#6a7fa3")));
+            p.drawText(QRect(trackX+trackW+gap+34,y,valueW-34,rowH),Qt::AlignRight|Qt::AlignVCenter,QString("%1%").arg(pct));
+        }
+    }
+};
+
+class ServicePerformanceDialog final : public QDialog {
+    static QTableWidget *makeTable(const QStringList &headers,const QVector<QStringList> &rows,QWidget *parent) {
+        auto *table=new QTableWidget(rows.size(),headers.size(),parent);
+        table->setHorizontalHeaderLabels(headers);
+        table->verticalHeader()->hide(); table->setShowGrid(false); table->setAlternatingRowColors(true);
+        table->setSelectionMode(QAbstractItemView::NoSelection); table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        table->setFocusPolicy(Qt::NoFocus);
+        table->setStyleSheet("QTableWidget{background:#fff;alternate-background-color:#f6faff;border:1px solid #dfeaf7;border-radius:10px;font-size:14px;color:#17294f;}"
+                             "QHeaderView::section{background:#eef4fc;color:#38507c;font-weight:700;font-size:13px;border:none;padding:8px;}"
+                             "QTableWidget::item{padding:6px;}");
+        table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+        for(int r=0;r<rows.size();++r) {
+            table->setRowHeight(r,38);
+            for(int c=0;c<rows[r].size();++c) table->setItem(r,c,new QTableWidgetItem(rows[r][c]));
+        }
+        return table;
+    }
+public:
+    explicit ServicePerformanceDialog(QWidget *parent):QDialog(parent) {
+        setObjectName("serviceStatisticsDialog");
+        setWindowTitle("Service Performance — SkySense");
+        setMinimumSize(980,640); resize(1100,720);
+        QFile stylesheet(":/styles/services.qss");
+        if(stylesheet.open(QIODevice::ReadOnly)) setStyleSheet(QString::fromUtf8(stylesheet.readAll()));
+        auto *root=new QVBoxLayout(this); root->setContentsMargins(24,20,24,20); root->setSpacing(12);
+        root->addWidget(text("Service Performance","statsTitle"));
+        root->addWidget(text("On-time rate and gap between planned and actual duration, by service type.","statsSubtitle"));
+
+        const PerformanceStats all=performanceFor();
+        const int rate=onTimeRate(all);
+        const int avgGap=all.measured>0?qRound(double(all.actualSum-all.plannedSum)/all.measured):0;
+        int lateCount=0; for(const auto &r:serviceRecords) if(finishedLate(r)) ++lateCount;
+        auto *kpis=new QHBoxLayout; kpis->setSpacing(12);
+        auto addKpi=[&](const QString &label,const QString &value) {
+            auto *panel=new QFrame; panel->setObjectName("serviceStatisticsPanel");
+            auto *l=new QVBoxLayout(panel); l->setContentsMargins(20,14,20,14); l->setSpacing(2);
+            l->addWidget(text(label,"smallMuted")); l->addWidget(text(value,"statsChartTitle"));
+            kpis->addWidget(panel,1);
+        };
+        addKpi("On-time rate",rate>=0?QString("%1%").arg(rate):QString("—"));
+        addKpi("Average gap (actual vs planned)",all.measured>0?gapText(avgGap):QString("—"));
+        addKpi("Late services",QString::number(lateCount));
+        root->addLayout(kpis);
+
+        root->addWidget(text("By service type","formSectionTitle"));
+        const QStringList types{"Maintenance","Calibration","Inspection","Repair","Connectivity","Software"};
+        QVector<QStringList> typeRows;
+        for(const QString &type:types) {
+            const PerformanceStats st=performanceFor(type);
+            const int tr=onTimeRate(st);
+            const int plannedAvg=st.measured>0?st.plannedSum/st.measured:0, actualAvg=st.measured>0?st.actualSum/st.measured:0;
+            typeRows.append({type,QString::number(st.completed),QString::number(st.overdue),tr>=0?QString("%1%").arg(tr):QString("—"),
+                             st.measured>0?durationText(plannedAvg):QString("—"),st.measured>0?durationText(actualAvg):QString("—"),
+                             st.measured>0?gapText(actualAvg-plannedAvg):QString("—")});
+        }
+        auto *byType=makeTable({"Type","Completed","Overdue","On-time rate","Avg planned","Avg actual","Avg gap"},typeRows,this);
+        byType->setMinimumHeight(40+types.size()*38+6);
+        root->addWidget(byType);
+
+        root->addWidget(text("Late services (flagged)","formSectionTitle"));
+        QVector<QStringList> lateRows;
+        for(const auto &r:serviceRecords) {
+            if(!finishedLate(r)) continue;
+            const QString delay=r.status=="Overdue"?QString("Overdue"):gapText(actualMinutes(r)-plannedMinutes(r))+" late";
+            lateRows.append({r.id,r.title,r.type,r.stationCode,r.assignee,delay});
+        }
+        if(lateRows.isEmpty()) root->addWidget(text("No late service. Every completed service finished on time.","statsCaption"));
+        else root->addWidget(makeTable({"ID","Service","Type","Station","Assignee","Delay"},lateRows,this),1);
+        if(lateRows.isEmpty()) root->addStretch(1);
+
+        auto *footer=new QHBoxLayout;
+        footer->addWidget(text("A service is late when it is Overdue, or Completed after its planned end time.","statsFootnote"),1);
+        auto *close=button("Close","",false); close->setMinimumWidth(112); connect(close,&QPushButton::clicked,this,&QDialog::accept);
+        footer->addWidget(close); root->addLayout(footer);
+    }
+};
+
+class ServiceStatisticsDialog final : public QDialog {
+public:
+    ServiceStatisticsDialog(const QVector<ServiceChartItem> &statuses,
+                            const QVector<ServiceChartItem> &types,
+                            const QVector<ServiceChartItem> &priorities, QWidget *parent)
+        : QDialog(parent) {
+        setObjectName("serviceStatisticsDialog");
+        setWindowTitle("Service Statistics — SkySense");
+        setMinimumSize(1020,560); resize(1200,640);
+        QFile stylesheet(":/styles/services.qss");
+        if(stylesheet.open(QIODevice::ReadOnly)) setStyleSheet(QString::fromUtf8(stylesheet.readAll()));
+        auto *root=new QVBoxLayout(this); root->setContentsMargins(24,20,24,20); root->setSpacing(14);
+        auto *heading=new QVBoxLayout; heading->setSpacing(3);
+        heading->addWidget(text("Service Statistics","statsTitle"));
+        heading->addWidget(text("A live overview of service status, type and priority distribution.","statsSubtitle"));
+        root->addLayout(heading);
+        auto *charts=new QHBoxLayout; charts->setSpacing(14);
+        auto addPanel=[&](const QString &title,const QString &caption,const QVector<ServiceChartItem> &items) {
+            auto *panel=new QFrame; panel->setObjectName("serviceStatisticsPanel");
+            auto *layout=new QVBoxLayout(panel); layout->setContentsMargins(22,20,22,18); layout->setSpacing(5);
+            int total=0; for(const auto &item:items) total+=item.value;
+            layout->addWidget(text(title,"statsChartTitle"));
+            layout->addWidget(text(caption,"statsCaption"));
+            auto *totalLabel=text(QString("Total: %1 service%2").arg(total).arg(total==1?"":"s"),"statsTotal");
+            layout->addWidget(totalLabel); layout->addSpacing(6);
+            layout->addWidget(new ServiceBarChart(items,panel),1);
+            charts->addWidget(panel,1);
+        };
+        addPanel("Services by status","Number of current services in each status.",statuses);
+        addPanel("Services by type","How the service workload is distributed by type.",types);
+        addPanel("Services by priority","Priority levels requiring operational attention.",priorities);
+        root->addLayout(charts,1);
+        auto *footer=new QHBoxLayout;
+        footer->addWidget(text("Charts reflect the services currently shown in the system.","statsFootnote"),1);
+        auto *performance=button("Performance","clock",false); performance->setObjectName("servicePerformanceAction");
+        QObject::connect(performance,&QPushButton::clicked,this,[this]() { ServicePerformanceDialog dialog(this); dialog.exec(); });
+        footer->addWidget(performance);
+        auto *close=button("Close","",false); close->setMinimumWidth(112); QObject::connect(close,&QPushButton::clicked,this,&QDialog::accept); footer->addWidget(close);
+        root->addLayout(footer);
+    }
+};
+
+class ServiceExportSelectDialog final : public QDialog {
+    QTableWidget *list=nullptr; QPushButton *exportButton=nullptr; QLabel *counter=nullptr;
+    QVector<ServiceRecord> records;
+    bool bulk=false;
+    void refreshState() {
+        int n=0; for(int r=0;r<list->rowCount();++r) if(list->item(r,0)->checkState()==Qt::Checked) ++n;
+        counter->setText(QString("%1 of %2 selected").arg(n).arg(records.size()));
+        exportButton->setEnabled(n>0);
+        exportButton->setText(n>0?QString("Export %1 service%2").arg(n).arg(n==1?"":"s"):QString("Export"));
+    }
+    void setAll(bool on) {
+        bulk=true; for(int r=0;r<list->rowCount();++r) list->item(r,0)->setCheckState(on?Qt::Checked:Qt::Unchecked);
+        bulk=false; refreshState();
+    }
+public:
+    ServiceExportSelectDialog(const QVector<ServiceRecord> &source,QWidget *parent):QDialog(parent),records(source) {
+        setObjectName("serviceStatisticsDialog");
+        setWindowTitle("Export Services — SkySense");
+        setMinimumSize(820,480); resize(960,560);
+        QFile stylesheet(":/styles/services.qss");
+        if(stylesheet.open(QIODevice::ReadOnly)) setStyleSheet(QString::fromUtf8(stylesheet.readAll()));
+        auto *root=new QVBoxLayout(this); root->setContentsMargins(24,20,24,20); root->setSpacing(12);
+        root->addWidget(text("Choose services to export","statsTitle"));
+        root->addWidget(text("Tick one or more services. Only the selected ones will be included in the PDF.","statsSubtitle"));
+        auto *tools=new QHBoxLayout; tools->setSpacing(8);
+        auto *all=button("Select all","",false); auto *none=button("Clear selection","",false);
+        all->setMinimumHeight(36); none->setMinimumHeight(36);
+        counter=text("","statsCaption"); counter->setWordWrap(false);
+        tools->addWidget(all); tools->addWidget(none); tools->addStretch(1); tools->addWidget(counter);
+        root->addLayout(tools);
+        list=new QTableWidget(records.size(),6,this);
+        list->setHorizontalHeaderLabels({"","ID","Service","Station","Priority","Status"});
+        list->verticalHeader()->hide(); list->setShowGrid(false); list->setAlternatingRowColors(true);
+        list->setSelectionMode(QAbstractItemView::NoSelection); list->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        list->setFocusPolicy(Qt::NoFocus);
+        list->setStyleSheet("QTableWidget{background:#fff;alternate-background-color:#f6faff;border:1px solid #dfeaf7;border-radius:10px;font-size:14px;color:#17294f;}"
+                            "QHeaderView::section{background:#eef4fc;color:#38507c;font-weight:700;font-size:13px;border:none;padding:8px;}"
+                            "QTableWidget::item{padding:6px;}");
+        auto *header=list->horizontalHeader(); header->setSectionResizeMode(QHeaderView::ResizeToContents);
+        header->setSectionResizeMode(2,QHeaderView::Stretch); header->setSectionResizeMode(3,QHeaderView::Stretch);
+        header->setStretchLastSection(false);
+        for(int r=0;r<records.size();++r) {
+            const auto &rec=records[r];
+            auto *check=new QTableWidgetItem; check->setFlags(Qt::ItemIsEnabled|Qt::ItemIsUserCheckable); check->setCheckState(Qt::Unchecked);
+            list->setItem(r,0,check);
+            const QStringList cols{rec.id,rec.title,rec.stationCode+" — "+rec.stationName,rec.priority,rec.status};
+            for(int c=0;c<cols.size();++c) { auto *it=new QTableWidgetItem(cols[c]); it->setFlags(Qt::ItemIsEnabled); list->setItem(r,c+1,it); }
+            list->setRowHeight(r,40);
+        }
+        root->addWidget(list,1);
+        auto *footer=new QHBoxLayout; footer->addStretch(1);
+        auto *cancel=button("Cancel","",false); cancel->setMinimumWidth(112);
+        exportButton=button("Export","export",true); exportButton->setMinimumWidth(180);
+        footer->addWidget(cancel); footer->addWidget(exportButton); root->addLayout(footer);
+        connect(list,&QTableWidget::cellClicked,this,[this](int row,int col) {
+            if(col==0) return;
+            auto *it=list->item(row,0); it->setCheckState(it->checkState()==Qt::Checked?Qt::Unchecked:Qt::Checked);
+        });
+        connect(list,&QTableWidget::itemChanged,this,[this](QTableWidgetItem *) { if(!bulk) refreshState(); });
+        connect(all,&QPushButton::clicked,this,[this]() { setAll(true); });
+        connect(none,&QPushButton::clicked,this,[this]() { setAll(false); });
+        connect(cancel,&QPushButton::clicked,this,&QDialog::reject);
+        connect(exportButton,&QPushButton::clicked,this,&QDialog::accept);
+        refreshState();
+    }
+    QVector<ServiceRecord> selected() const {
+        QVector<ServiceRecord> out;
+        for(int r=0;r<list->rowCount();++r) if(list->item(r,0)->checkState()==Qt::Checked) out.append(records[r]);
+        return out;
+    }
+};
+
 QWidget *formField(const QString &title,QWidget *control,bool required=true)
 {
     auto *field=new QWidget; auto *layout=new QVBoxLayout(field); layout->setContentsMargins(0,0,0,0); layout->setSpacing(5);
@@ -460,15 +1062,21 @@ class AddServiceDialog final : public QDialog {
     QComboBox *typeCombo=nullptr,*stationCombo=nullptr,*assigneeCombo=nullptr,*priorityCombo=nullptr,*statusCombo=nullptr;
     QDateEdit *dateEdit=nullptr;
     QTimeEdit *startEdit=nullptr,*endEdit=nullptr;
+    QTimeEdit *actualEndEdit=nullptr;
+    QLabel *durationPreview=nullptr;
+    double keptQuantity=1.0,keptUnitPrice=0.0;   // not shown in the form; kept as stored in Oracle
     QTextEdit *descriptionEdit=nullptr;
     QLabel *descriptionCount=nullptr,*stationCodePreview=nullptr,*stationNamePreview=nullptr,*datePreview=nullptr,*timePreview=nullptr;
     QVBoxLayout *checklistLayout=nullptr;
     QStringList checklistItems;
+    QList<QCheckBox *> checklistChecks;
+    QPushButton *addChecklistButton=nullptr;
     bool editingMode=false;
     bool deleteRequestedFlag=false;
 public:
     explicit AddServiceDialog(QWidget *parent=nullptr,const ServiceRecord *existing=nullptr):QDialog(parent),editingMode(existing!=nullptr) {
         setObjectName("addServiceDialog");
+        if(existing) { keptQuantity=existing->quantity; keptUnitPrice=existing->unitPrice; }
         setWindowTitle(editingMode?"Edit Service — SkySense":"Add Service — SkySense");
         setWindowModality(Qt::WindowModal);
         setWindowFlags(Qt::Dialog|Qt::WindowTitleHint|Qt::WindowCloseButtonHint);
@@ -540,19 +1148,22 @@ public:
         titleEdit->setPlaceholderText("Enter service title");
         typeCombo=selector({"Maintenance","Calibration","Inspection","Repair","Connectivity","Software"});
         stationCombo=selector({"Select station"});
-        const QStringList stationCodes{"ALP-03","COA-01","FOR-12","VAL-07","DES-05"};
-        const QStringList stationNames{"Alpine Ridge","Coastal Bay","Pine Forest","Green Valley","Desert View"};
-        for(int i=0;i<stationCodes.size();++i) {
-            stationCombo->addItem(stationCodes[i]+" — "+stationNames[i]);
-            stationCombo->setItemData(i+1,stationCodes[i],Qt::UserRole);
-            stationCombo->setItemData(i+1,stationNames[i],Qt::UserRole+1);
+        for(const auto &station:serviceStationChoices) {
+            stationCombo->addItem(station.code+" — "+station.name);
+            const int index=stationCombo->count()-1;
+            stationCombo->setItemData(index,station.code,Qt::UserRole);
+            stationCombo->setItemData(index,station.name,Qt::UserRole+1);
+            stationCombo->setItemData(index,station.id,Qt::UserRole+2);
         }
-        assigneeCombo=selector({"Select assignee","James Wilson","Sophie Chen","Miguel Santos","Emma Davis","Ryan Kim","Olivia Martinez"});
-        dateEdit=new QDateEdit(QDate(2025,4,24)); dateEdit->setDisplayFormat("MMM dd, yyyy"); dateEdit->setCalendarPopup(true); dateEdit->setFixedHeight(48);
+        assigneeCombo=selector({"Select assignee"});
+        for(const auto &person:servicePersonChoices) { assigneeCombo->addItem(person.name); assigneeCombo->setItemData(assigneeCombo->count()-1,person.id,Qt::UserRole); }
+        dateEdit=new QDateEdit(QDate::currentDate()); dateEdit->setDisplayFormat("MMM dd, yyyy"); dateEdit->setCalendarPopup(true); dateEdit->setFixedHeight(48);
         startEdit=new QTimeEdit(QTime(8,0)); startEdit->setDisplayFormat("HH:mm"); startEdit->setFixedHeight(48);
         endEdit=new QTimeEdit(QTime(10,0)); endEdit->setDisplayFormat("HH:mm"); endEdit->setFixedHeight(48);
         priorityCombo=selector({"High","Medium","Low"}); priorityCombo->setCurrentText("Medium");
         statusCombo=selector({"Scheduled","In Progress","Completed","Overdue"});
+        actualEndEdit=new QTimeEdit(QTime(10,0)); actualEndEdit->setDisplayFormat("HH:mm"); actualEndEdit->setFixedHeight(48);
+        durationPreview=text(QString(),"statsTotal"); durationPreview->setWordWrap(false);
         if(existing) {
             titleEdit->setText(existing->title);
             typeCombo->setCurrentText(existing->type);
@@ -563,6 +1174,8 @@ public:
             const QTime savedEnd=QTime::fromString(existing->endTime,"HH:mm"); if(savedEnd.isValid()) endEdit->setTime(savedEnd);
             priorityCombo->setCurrentText(existing->priority);
             statusCombo->setCurrentText(existing->status);
+            const QTime savedActual=QTime::fromString(existing->actualEndTime,"HH:mm");
+            actualEndEdit->setTime(savedActual.isValid()?savedActual:endEdit->time());
         }
         detailsGrid->addWidget(formField("Title",titleEdit),0,0);
         detailsGrid->addWidget(formField("Type",typeCombo),0,1);
@@ -573,8 +1186,31 @@ public:
         detailsGrid->addWidget(formField("End Time",endEdit),2,2);
         detailsGrid->addWidget(formField("Priority",priorityCombo),3,0);
         detailsGrid->addWidget(formField("Status",statusCombo),3,1);
+        detailsGrid->addWidget(formField("Actual End Time",actualEndEdit,false),3,2);
+        detailsGrid->addWidget(durationPreview,5,0,1,3);
         for(int column=0;column<3;++column) detailsGrid->setColumnStretch(column,1);
         cardLayout->addLayout(detailsGrid);
+        // I2 (performance): live comparison between planned and actual duration.
+        auto updateDuration=[this]() {
+            const bool done=statusCombo->currentText()=="Completed";
+            actualEndEdit->setEnabled(done);
+            const QString from=startEdit->time().toString("HH:mm");
+            const int planned=minutesBetween(from,endEdit->time().toString("HH:mm"));
+            QString info=QString("Planned duration: %1").arg(durationText(planned));
+            if(done) {
+                const int actual=minutesBetween(from,actualEndEdit->time().toString("HH:mm"));
+                info+=QString("   •   Actual: %1 (%2 vs planned)").arg(durationText(actual),gapText(actual-planned));
+            }
+            durationPreview->setText(info);
+        };
+        connect(statusCombo,qOverload<int>(&QComboBox::currentIndexChanged),this,[updateDuration](int) { updateDuration(); });
+        connect(startEdit,&QTimeEdit::timeChanged,this,[updateDuration](const QTime &) { updateDuration(); });
+        connect(endEdit,&QTimeEdit::timeChanged,this,[this,updateDuration](const QTime &t) {
+            if(statusCombo->currentText()!="Completed") actualEndEdit->setTime(t);
+            updateDuration();
+        });
+        connect(actualEndEdit,&QTimeEdit::timeChanged,this,[updateDuration](const QTime &) { updateDuration(); });
+        updateDuration();
 
         descriptionEdit=new QTextEdit;
         descriptionEdit->setPlaceholderText("Enter service description...");
@@ -601,17 +1237,21 @@ public:
         checklistLayout->setSpacing(7);
         cardLayout->addLayout(checklistLayout);
         if(existing) {
-            for(const QString &item:existing->checklist) addChecklistRow(item);
+            for(int i=0;i<existing->checklist.size();++i) {
+                addChecklistRow(existing->checklist[i],true);
+                if(i<checklistChecks.size() && i<existing->checklistDone.size()) checklistChecks[i]->setChecked(existing->checklistDone[i]);
+            }
         } else {
             addChecklistRow("Check equipment status and perform visual inspection");
             addChecklistRow("Calibrate sensors and verify readings");
             addChecklistRow("Update maintenance logs and reports");
         }
-        auto *addCheck=button("Add checklist item","plus");
-        addCheck->setProperty("link",true);
-        addCheck->setFixedHeight(34);
-        connect(addCheck,&QPushButton::clicked,this,[this]() { addChecklistRow(QString()); });
-        cardLayout->addWidget(addCheck,0,Qt::AlignLeft);
+        addChecklistButton=button("Add checklist item","plus");
+        addChecklistButton->setObjectName("addChecklistItem");
+        addChecklistButton->setProperty("link",true);
+        addChecklistButton->setFixedHeight(34);
+        connect(addChecklistButton,&QPushButton::clicked,this,[this]() { addChecklistRow(QString()); });
+        cardLayout->addWidget(addChecklistButton,0,Qt::AlignLeft);
         scroll->setWidget(card);
 
         if(editingMode) {
@@ -682,7 +1322,9 @@ public:
         record.type=typeCombo->currentText();
         record.stationCode=stationCombo->currentData(Qt::UserRole).toString();
         record.stationName=stationCombo->currentData(Qt::UserRole+1).toString();
+        record.stationId=stationCombo->currentData(Qt::UserRole+2).toInt();
         record.assignee=assigneeCombo->currentText();
+        record.personnelId=assigneeCombo->currentData(Qt::UserRole).toInt();
         record.date=dateEdit->date().toString("MMM dd, yyyy");
         record.startTime=startEdit->time().toString("HH:mm");
         record.endTime=endEdit->time().toString("HH:mm");
@@ -690,6 +1332,9 @@ public:
         record.status=statusCombo->currentText();
         record.description=descriptionEdit->toPlainText();
         record.checklist=checklistItems;
+        for(const QCheckBox *check:checklistChecks) record.checklistDone.append(check&&check->isChecked());
+        record.quantity=keptQuantity; record.unitPrice=keptUnitPrice;
+        record.actualEndTime=statusCombo->currentText()=="Completed"?actualEndEdit->time().toString("HH:mm"):QString();
         return record;
     }
     bool deleteRequested() const { return deleteRequestedFlag; }
@@ -703,13 +1348,18 @@ private:
         datePreview->setText(dateEdit->date().toString("MMM dd, yyyy"));
         timePreview->setText(startEdit->time().toString("HH:mm")+" – "+endEdit->time().toString("HH:mm"));
     }
-    void addChecklistRow(const QString &value) {
+    void addChecklistRow(const QString &value,bool legacy=false) {
+        if(!legacy && checklistLayout->count()>=3) {
+            QMessageBox::information(this,"Checklist limit","A service can contain a maximum of 3 local checklist tasks.");
+            return;
+        }
         auto *row=new QWidget;
         row->setProperty("role","checklistRow");
         auto *layout=new QHBoxLayout(row);
         layout->setContentsMargins(8,3,8,3);
         layout->setSpacing(8);
         auto *done=new QCheckBox;
+        done->setObjectName("serviceChecklistDone");
         auto *item=new QLineEdit(value);
         item->setPlaceholderText("Enter checklist item");
         item->setProperty("checklistInput",true);
@@ -720,19 +1370,43 @@ private:
         layout->addWidget(item,1);
         layout->addWidget(remove);
         checklistLayout->addWidget(row);
-        connect(remove,&QPushButton::clicked,this,[this,row]() { playClickSound(); checklistLayout->removeWidget(row); row->deleteLater(); });
+        checklistChecks.append(done);
+        connect(remove,&QPushButton::clicked,this,[this,row,done]() {
+            checklistChecks.removeAll(done);
+            checklistLayout->removeWidget(row);
+            row->deleteLater();
+            updateChecklistButton();
+        });
+        updateChecklistButton();
+    }
+    void updateChecklistButton() {
+        if(!addChecklistButton) return;
+        const int count=checklistLayout->count();
+        addChecklistButton->setEnabled(count<3);
+        addChecklistButton->setText(count<3?"Add checklist item": "Maximum of 3 checklist tasks");
     }
     void createService() {
         if(titleEdit->text().trimmed().isEmpty()) { QMessageBox::warning(this,"Service title required","Enter a title for this service."); titleEdit->setFocus(); return; }
         if(stationCombo->currentIndex()==0) { QMessageBox::warning(this,"Station required","Select a weather station for this service."); stationCombo->setFocus(); return; }
         if(assigneeCombo->currentIndex()==0) { QMessageBox::warning(this,"Assignee required","Select a staff member to assign this service to."); assigneeCombo->setFocus(); return; }
         if(endEdit->time()<=startEdit->time()) { QMessageBox::warning(this,"Schedule time invalid","End time must be later than start time."); endEdit->setFocus(); return; }
+        if(statusCombo->currentText()=="Completed" && actualEndEdit->time()<=startEdit->time()) { QMessageBox::warning(this,"Actual end time invalid","The actual end time must be later than the start time."); actualEndEdit->setFocus(); return; }
+        if(checklistLayout->count()==0) { QMessageBox::warning(this,"Checklist required","Add at least one local checklist task before saving this service."); return; }
+        if(checklistLayout->count()>3) { QMessageBox::warning(this,"Checklist limit","This older service has more than three checklist tasks. Remove the extra tasks before saving."); return; }
         checklistItems.clear();
         for(int i=0;i<checklistLayout->count();++i) {
             auto *row=checklistLayout->itemAt(i)->widget();
             if(!row) continue;
             auto *edit=row->findChild<QLineEdit *>();
             if(edit && !edit->text().trimmed().isEmpty()) checklistItems.append(edit->text().trimmed());
+        }
+        if(checklistItems.isEmpty()) { QMessageBox::warning(this,"Checklist required","Enter at least one checklist task before saving this service."); return; }
+        if(statusCombo->currentText()=="Completed") {
+            const bool allDone=std::all_of(checklistChecks.cbegin(),checklistChecks.cend(),[](const QCheckBox *check) { return check && check->isChecked(); });
+            if(!allDone) {
+                QMessageBox::warning(this,"Complete the checklist","Mark every checklist task as completed before setting the service status to Completed.");
+                return;
+            }
         }
         accept();
     }
@@ -782,7 +1456,7 @@ public:
         close->setCursor(Qt::PointingHandCursor);
         heading->addWidget(close,0,Qt::AlignTop);
         surfaceLayout->addLayout(heading);
-        connect(close,&QPushButton::clicked,this,[this]() { playClickSound(); reject(); });
+        connect(close,&QPushButton::clicked,this,[this]() { reject(); });
         auto *divider=new QFrame; divider->setObjectName("serviceFormDivider"); divider->setFixedHeight(1); surfaceLayout->addWidget(divider);
 
         auto *columns=new QHBoxLayout;
@@ -963,35 +1637,36 @@ QWidget *detailInfo()
 {
     auto *box=new QWidget; auto *v=new QVBoxLayout(box); v->setContentsMargins(0,0,0,0); v->setSpacing(5);
     v->addWidget(text("Service Details","detailTitle"));
-    const QStringList fields{"Service ID|SRV-001","Type|Maintenance","Station|ALP-03 (Alpine Ridge)","Scheduled|Apr 24, 2025 09:00–12:00","Assigned To|James Wilson","Priority|High"};
+    const QStringList fields{"Service ID|—","Type|—","Station|—","Scheduled|—","Assigned To|—","Priority|—"};
     for(const auto &field:fields) { auto *row=new QHBoxLayout; row->addWidget(text(field.section('|',0,0),"smallMuted")); row->addStretch(); row->addWidget(text(field.section('|',1,1),"smallValue")); v->addLayout(row); }
-    v->addWidget(text("Routine maintenance check including calibration, system health verification, and component inspection.","recommendationCopy")); return box;
+    v->addWidget(text("Choose a service to view its saved details.","recommendationCopy")); return box;
 }
 
 QWidget *checklist()
 {
     auto *box=new QWidget; auto *v=new QVBoxLayout(box); v->setContentsMargins(0,0,0,0); v->setSpacing(7); v->addWidget(text("Service Checklist","detailTitle"));
-    const QStringList tasks{"Visual inspection of equipment|09:15","Clean solar panels|09:40","Check sensor alignment|10:20","Verify calibration readings|Pending","Test data transmission|Pending"};
-    for(int i=0;i<tasks.size();++i) { auto *row=new QHBoxLayout; auto *mark=text(i<3?QString::fromUtf8("●"):QString::fromUtf8("○"),i<3?"doneDot":"todoDot"); mark->setFixedWidth(15); row->addWidget(mark); row->addWidget(text(tasks[i].section('|',0,0),"smallValue"),1); row->addWidget(text(tasks[i].section('|',1,1),"smallMuted")); v->addLayout(row); } return box;
+    v->addWidget(text("No service selected.","recommendationCopy")); return box;
 }
 
 QWidget *timeline()
 {
-    auto *box=new QWidget; auto *v=new QVBoxLayout(box); v->setContentsMargins(0,0,0,0); v->setSpacing(7); v->addWidget(text("Service Timeline","detailTitle"));
-    const QStringList events{"Service scheduled|Apr 24, 2025 08:00","Technician on site|Apr 24, 2025 09:12","Maintenance in progress|Apr 24, 2025 09:15","Service completion|Pending","Report submitted|Pending"};
-    for(int i=0;i<events.size();++i) { auto *row=new QHBoxLayout; auto *mark=text(i<3?QString::fromUtf8("●"):QString::fromUtf8("○"),i<3?"timelineDone":"timelinePending"); mark->setFixedWidth(15); row->addWidget(mark); auto *copy=new QVBoxLayout; copy->setSpacing(0); copy->addWidget(text(events[i].section('|',0,0),"smallValue")); copy->addWidget(text(events[i].section('|',1,1),"smallMuted")); row->addLayout(copy,1); v->addLayout(row); } return box;
+    auto *box=new QWidget; auto *v=new QVBoxLayout(box); v->setContentsMargins(0,0,0,0); v->setSpacing(7); v->addWidget(text("Completion Summary","detailTitle"));
+    auto *headline=text("No completion data selected","smallValue"); v->addWidget(headline);
+    v->addWidget(text("Select a service to review its saved checklist and status.","smallMuted"));
+    const QStringList items{"Completed tasks|—","Pending tasks|—","Current status|—","Planned duration|—"};
+    for(const QString &item:items) { auto *row=new QHBoxLayout; row->addWidget(text(item.section('|',0,0),"smallMuted")); row->addStretch(); row->addWidget(text(item.section('|',1,1),"smallValue")); v->addLayout(row); }
+    v->addStretch(); return box;
 }
 
 QWidget *stationInfo()
 {
     auto *box=new QWidget; auto *v=new QVBoxLayout(box); v->setContentsMargins(0,0,0,0); v->setSpacing(5); v->addWidget(text("Station Information","detailTitle"));
-    auto *badge=new QHBoxLayout; badge->addWidget(new Glyph("pin",blue,30,true)); auto *copy=new QVBoxLayout; copy->setSpacing(0); copy->addWidget(text("ALP-03","smallValue")); copy->addWidget(text("Alpine Ridge","smallMuted")); badge->addLayout(copy,1); v->addLayout(badge);
-    v->addWidget(text("2,450 m altitude","smallMuted")); auto *online=new QHBoxLayout; online->addWidget(text(QString::fromUtf8("●"),"greenDot")); online->addWidget(text("Online","smallValue")); online->addStretch(); v->addLayout(online);
+    v->addWidget(text("No station selected.","smallMuted"));
     auto *link=button("View Station","external"); link->setProperty("link",true); v->addWidget(link,0,Qt::AlignLeft); v->addStretch(); return box;
 }
 
 class ServicesPage final : public QWidget {
-    QGridLayout *detailGrid=nullptr; QList<QWidget *> detailPanels; QVBoxLayout *body=nullptr; ServiceTable *serviceTable=nullptr; int detailColumns=0;
+    QGridLayout *detailGrid=nullptr; QList<QWidget *> detailPanels; QVBoxLayout *body=nullptr; ServiceTable *serviceTable=nullptr; QDateEdit *reportDatePicker=nullptr; int detailColumns=0;
     QLineEdit *filterSearch=nullptr,*globalSearch=nullptr;
     QComboBox *typeFilter=nullptr,*stationFilter=nullptr,*statusFilter=nullptr;
     QWidget *emptyState=nullptr;
@@ -1002,22 +1677,32 @@ public:
     explicit ServicesPage(QWidget *parent):QWidget(parent) {
         setObjectName("servicesPage"); auto *outer=new QVBoxLayout(this); outer->setContentsMargins(0,0,0,0); outer->setSpacing(0);
         auto *top=card("topbar"); introWidgets.append(top); auto *bar=new QHBoxLayout(top); bar->setContentsMargins(28,10,24,10); bar->setSpacing(16);
-        globalSearch=search("Search services by ID, title, station, or assignee..."); globalSearch->setMaximumWidth(540); bar->addWidget(globalSearch,1); bar->addStretch();
-        bar->addWidget(new Glyph("calendar",navy,24)); bar->addWidget(text("Thu, Apr 24, 2025","topDate")); bar->addWidget(new Glyph("down",muted,18));
+        globalSearch=search("Search services by ID, title, type, status, station, or assignee..."); globalSearch->setObjectName("serviceGlobalSearch"); globalSearch->setMaximumWidth(540); bar->addWidget(globalSearch,1); bar->addStretch();
+        bar->addWidget(new Glyph("calendar",navy,24));
+        reportDatePicker=new ServiceReportDateEdit;
+        reportDatePicker->setObjectName("serviceReportDatePicker");
+        reportDatePicker->setLocale(QLocale(QLocale::English,QLocale::UnitedStates));
+        reportDatePicker->setDisplayFormat("ddd, dd MMM yyyy");
+        reportDatePicker->setToolTip("Choose the report date for the Services PDF.");
+        reportDatePicker->setFixedHeight(38);
+        reportDatePicker->setMinimumWidth(176);
+        reportDatePicker->setCursor(Qt::PointingHandCursor);
+        bar->addWidget(reportDatePicker);
         auto *divider=new QFrame; divider->setProperty("role","divider"); divider->setFixedSize(1,35); bar->addWidget(divider); bar->addWidget(new Glyph("user",muted,40,true));
-        auto *user=new QVBoxLayout; user->setSpacing(1); user->addWidget(text("Alex Martin","detailTitle")); user->addWidget(text("Operations Manager","smallMuted")); bar->addLayout(user); bar->addWidget(new Glyph("down",navy,18)); outer->addWidget(top);
+        auto *user=new QVBoxLayout; user->setSpacing(1); user->addWidget(text("Alex Martin","detailTitle")); user->addWidget(text("Operations Manager","smallMuted")); bar->addLayout(user); bar->addWidget(new Glyph("down",navy,18)); top->hide(); outer->addWidget(top);
 
         auto *scroll=new QScrollArea; scroll->setObjectName("servicesScroll"); scroll->setWidgetResizable(true); scroll->setFrameShape(QFrame::NoFrame); scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); outer->addWidget(scroll,1);
         auto *content=new QWidget; content->setObjectName("servicesContent"); body=new QVBoxLayout(content); body->setContentsMargins(28,16,24,8); body->setSpacing(10); body->setSizeConstraint(QLayout::SetMinimumSize);
 
         auto *headerWidget=new QWidget; introWidgets.append(headerWidget); auto *header=new QHBoxLayout(headerWidget); header->setContentsMargins(0,0,0,0); auto *copy=new QVBoxLayout; copy->setSpacing(0); copy->addWidget(text("Services","pageTitle")); copy->addWidget(text("Manage and track field services, maintenance visits, and support activities.","subtitle")); header->addLayout(copy,1); header->addSpacing(12);
-        header->addWidget(button("Export PDF","export"));
+        auto *statisticsButton=button("Statistics","chart"); statisticsButton->setObjectName("serviceStatisticsAction"); header->addWidget(statisticsButton);
+        auto *exportButton=button("Export PDF","export"); exportButton->setObjectName("exportServicesAction"); exportButton->setToolTip("Choose which services to export to a PDF report."); header->addWidget(exportButton);
         auto *deleteButton=button("Delete","trash"); deleteButton->setObjectName("deleteServiceAction"); header->addWidget(deleteButton);
         auto *editButton=button("Edit","edit"); editButton->setObjectName("editServiceAction"); header->addWidget(editButton);
         auto *addButton=button("Add Service","plus",true); header->addWidget(addButton); body->addWidget(headerWidget);
 
         auto *metricsWidget=new QWidget; auto *metrics=new QHBoxLayout(metricsWidget); metrics->setContentsMargins(0,0,0,0); metrics->setSpacing(12);
-        for(QWidget *metric:{metricCard("Total Services","46","/ 50 this month","+12% from last month","wrench",blue,"blue"),metricCard("Completed","32","/ 50 this month","+18% from last month","check",QColor("#00b863"),"green"),metricCard("In Progress","8","/ 50 this month","+2% from last month","clock",QColor("#ff3859"),"red"),metricCard("Overdue","6","/ 50 this month","+3 from last month","camera",QColor("#7948ff"),"purple")}) {
+        for(QWidget *metric:{metricCard("Total Services","0","in preview mode","","wrench",blue,"blue"),metricCard("Completed","0","in preview mode","","check",QColor("#00b863"),"green"),metricCard("In Progress","0","in preview mode","","clock",QColor("#ff3859"),"red"),metricCard("Overdue","0","in preview mode","","camera",QColor("#7948ff"),"purple")}) {
             metrics->addWidget(metric,1); introWidgets.append(metric);
             QLabel *countLabel=nullptr;
             const auto labels=metric->findChildren<QLabel *>();
@@ -1028,9 +1713,11 @@ public:
         }
         body->addWidget(metricsWidget);
 
-        auto *filtersWidget=new QWidget; introWidgets.append(filtersWidget); auto *filters=new QHBoxLayout(filtersWidget); filters->setContentsMargins(0,0,0,0); filters->setSpacing(10); filterSearch=search("Search by ID, title, station, or assignee..."); filters->addWidget(filterSearch,3);
+        auto *filtersWidget=new QWidget; introWidgets.append(filtersWidget); auto *filters=new QHBoxLayout(filtersWidget); filters->setContentsMargins(0,0,0,0); filters->setSpacing(10); filterSearch=search("Search by ID, title, type, status, station, or assignee..."); filters->addWidget(filterSearch,3);
         typeFilter=selector({"All Types","Maintenance","Calibration","Inspection","Repair","Connectivity","Software"}); filters->addWidget(typeFilter,1);
-        stationFilter=selector({"All Stations","ALP-03","COA-01","FOR-12","VAL-07","DES-05"}); filters->addWidget(stationFilter,1);
+        stationFilter=selector({"All Stations"});
+        for(const auto &station:serviceStationChoices) stationFilter->addItem(station.code);
+        filters->addWidget(stationFilter,1);
         statusFilter=selector({"All Statuses","In Progress","Scheduled","Completed","Overdue"}); filters->addWidget(statusFilter,1);
         auto *clear=button("Clear",""); clear->setProperty("link",true); filters->addWidget(clear); body->addWidget(filtersWidget);
         serviceTable=new ServiceTable; body->addWidget(serviceTable);
@@ -1060,19 +1747,33 @@ public:
         serviceTable->setChangeCallback([this,applyFilters]() { applyFilters(); });
         applyFilters();
         connect(addButton,&QPushButton::clicked,this,[this]() { openAddService(); });
+        connect(statisticsButton,&QPushButton::clicked,this,[this]() { openStatistics(); });
+        connect(exportButton,&QPushButton::clicked,this,[this]() { exportServices(); });
         connect(deleteButton,&QPushButton::clicked,this,[this]() { openDeleteService(); });
         connect(editButton,&QPushButton::clicked,this,[this]() { openEditService(); });
 
         auto *details=card("health"); introWidgets.append(details); auto *healthBox=new QVBoxLayout(details); healthBox->setContentsMargins(12,10,12,10); healthBox->setSpacing(9);
         auto *healthHead=new QHBoxLayout; healthHead->setSpacing(11); healthHead->addWidget(new Glyph("wrench",blue,44,true)); auto *healthCopy=new QVBoxLayout; healthCopy->setSpacing(1);
-        healthCopy->addWidget(text("SRV-001  –  Routine Maintenance","sectionTitle")); healthCopy->addWidget(text("Standard maintenance visit for weather station ALP-03.","smallMuted")); healthHead->addLayout(healthCopy,1);
-        healthHead->addWidget(pill("In Progress","blue")); healthHead->addWidget(text("Last updated 1 hour ago","smallMuted")); healthHead->addWidget(button("View Full Details","external")); healthBox->addLayout(healthHead);
+        healthCopy->addWidget(text("Service completion summary","sectionTitle")); healthCopy->addWidget(text("Select a service to review its recorded tasks and completion status.","smallMuted")); healthHead->addLayout(healthCopy,1);
+        healthBox->addLayout(healthHead);
         detailGrid=new QGridLayout; detailGrid->setSpacing(14); detailPanels={detailInfo(),checklist(),timeline(),stationInfo()}; healthBox->addLayout(detailGrid); body->addWidget(details); body->addStretch(); scroll->setWidget(content);
         adapt();
-        QTimer::singleShot(130,this,[this]() { animatePageContents(); });
     }
 protected:
     void resizeEvent(QResizeEvent *event) override { QWidget::resizeEvent(event); adapt(); }
+    void showEvent(QShowEvent *event) override {
+        QWidget::showEvent(event);
+        if(!serviceLoadError.isEmpty()) {
+            const QString message=serviceLoadError; serviceLoadError.clear();
+            QTimer::singleShot(250,this,[this,message]() {
+                QMessageBox::warning(window(),"Services table not ready",
+                    "The Services list could not be loaded from Oracle (table SKYSENSE_SERVICES).\n"
+                    "Run service_sqlplus.sql once in SQL*Plus, then restart SkySense.\n\n"+message);
+            });
+        }
+        if(property("integratedMode").toBool()) { introStarted=true; return; }
+        if(!introStarted) QTimer::singleShot(130,this,[this]() { animatePageContents(); });
+    }
 private:
     void animateWidget(QWidget *widget,int delayMs) {
         auto *effect=new QGraphicsOpacityEffect(widget);
@@ -1101,6 +1802,36 @@ private:
         metricCounts[2]->setText(QString::number(serviceTable->serviceCountWithStatus("In Progress")));
         metricCounts[3]->setText(QString::number(serviceTable->serviceCountWithStatus("Overdue")));
     }
+    void exportServices() {
+        const QVector<ServiceRecord> candidates=serviceTable?serviceTable->visibleServices():QVector<ServiceRecord>{};
+        if(candidates.isEmpty()) {
+            QMessageBox::information(this,"Nothing to export","No services match the current search and filters.");
+            return;
+        }
+        ServiceExportSelectDialog picker(candidates,window());
+        if(picker.exec()!=QDialog::Accepted) return;
+        const QVector<ServiceRecord> records=picker.selected();
+        if(records.isEmpty()) return;
+        QFileDialog dialog(window(),"Export services report",QDir::homePath()+"/SkySense_Services_"+QDate::currentDate().toString("yyyy-MM-dd")+".pdf","PDF document (*.pdf)");
+        dialog.setObjectName("serviceExportFileDialog"); dialog.setAcceptMode(QFileDialog::AcceptSave); dialog.setFileMode(QFileDialog::AnyFile);
+        dialog.setDefaultSuffix("pdf"); dialog.setOption(QFileDialog::DontUseNativeDialog,true);
+        if(dialog.exec()!=QDialog::Accepted||dialog.selectedFiles().isEmpty()) return;
+        QString path=dialog.selectedFiles().first(); if(!path.endsWith(".pdf",Qt::CaseInsensitive)) path+=".pdf";
+        QString error;
+        const QDate reportDate=reportDatePicker?reportDatePicker->date():QDate::currentDate();
+        if(!writeServicesPdf(path,records,&error,reportDate)) {
+            QMessageBox::critical(this,"Export failed",error);
+            return;
+        }
+        QMessageBox result(window()); result.setWindowTitle("Services exported"); result.setIcon(QMessageBox::Information);
+        result.setText(QString("%1 service record%2 exported successfully.").arg(records.size()).arg(records.size()==1?"":"s"));
+        result.setInformativeText(QString("Report date: %1\n%2").arg(reportDate.toString("dd MMM yyyy"),path));
+        auto *open=result.addButton("Open PDF",QMessageBox::ActionRole); result.addButton(QMessageBox::Close); result.exec();
+        if(result.clickedButton()==open&&!QDesktopServices::openUrl(QUrl::fromLocalFile(path)))
+            QMessageBox::information(this,"PDF saved","The report is saved at:\n"+path);
+    }
+    
+
     void openAddService() {
         QWidget *owner=window();
         auto *overlay=new QWidget(owner); overlay->setObjectName("modalDimmer"); overlay->setAttribute(Qt::WA_StyledBackground,true);
@@ -1114,7 +1845,14 @@ private:
         });
         const QPoint center=owner->mapToGlobal(owner->rect().center()); dialog.move(center-QPoint(dialog.width()/2,dialog.height()/2)); dialog.raise();
         const int result=dialog.exec(); overlay->hide(); overlay->deleteLater();
-        if(result==QDialog::Accepted && serviceTable) serviceTable->addService(dialog.service());
+        if(result==QDialog::Accepted && serviceTable) {
+            ServiceRecord record=dialog.service(); QString error;
+            if(!ServiceModel().insert(record,&error)) {
+                QMessageBox::critical(window(),"Oracle error","The service could not be saved in Oracle.\n\n"+error);
+                return;
+            }
+            serviceTable->addService(record);
+        }
     }
     void openEditService() {
         const int row=serviceTable?serviceTable->checkedRow():-1;
@@ -1136,8 +1874,21 @@ private:
         const QPoint center=owner->mapToGlobal(owner->rect().center()); dialog.move(center-QPoint(dialog.width()/2,dialog.height()/2)); dialog.raise();
         const int result=dialog.exec(); overlay->hide(); overlay->deleteLater();
         if(result==QDialog::Accepted && serviceTable) {
-            if(dialog.deleteRequested()) serviceTable->removeService(row);
-            else serviceTable->updateService(row,dialog.service());
+            if(dialog.deleteRequested()) {
+                QString error;
+                if(!ServiceModel().remove(existing.id,&error)) {
+                    QMessageBox::critical(window(),"Oracle error","The service could not be deleted from Oracle.\n\n"+error);
+                    return;
+                }
+                serviceTable->removeService(row);
+            } else {
+                const ServiceRecord updated=dialog.service(); QString error;
+                if(!ServiceModel().update(updated,&error)) {
+                    QMessageBox::critical(window(),"Oracle error","The service could not be updated in Oracle.\n\n"+error);
+                    return;
+                }
+                serviceTable->updateService(row,updated);
+            }
         }
     }
     void openDeleteService() {
@@ -1147,7 +1898,38 @@ private:
             return;
         }
         const ServiceRecord record=serviceTable->serviceAt(row);
-        if(confirmDeleteService(window(),record) && serviceTable) serviceTable->removeService(row);
+        if(confirmDeleteService(window(),record) && serviceTable) {
+            QString error;
+            if(!ServiceModel().remove(record.id,&error)) {
+                QMessageBox::critical(window(),"Oracle error","The service could not be deleted from Oracle.\n\n"+error);
+                return;
+            }
+            serviceTable->removeService(row);
+        }
+    }
+    void openStatistics() {
+        if(!serviceTable) return;
+        const QStringList statuses{"Scheduled","In Progress","Completed","Overdue"};
+        const QStringList types{"Maintenance","Calibration","Inspection","Repair","Connectivity","Software"};
+        const QStringList priorities{"High","Medium","Low"};
+        const QColor statusColors[]{QColor("#5489e8"),QColor("#24a6d8"),QColor("#18a66a"),QColor("#e14d5b")};
+        const QColor typeColors[]{QColor("#5489e8"),QColor("#7948ff"),QColor("#18a66a"),QColor("#e14d5b"),QColor("#24a6d8"),QColor("#e7a128")};
+        const QColor priorityColors[]{QColor("#e14d5b"),QColor("#e7a128"),QColor("#18a66a")};
+        QVector<ServiceChartItem> byStatus,byType,byPriority;
+        for(int i=0;i<statuses.size();++i) {
+            int count=0; for(int row=0;row<serviceTable->rowCount();++row) if(serviceTable->serviceAt(row).status==statuses[i]) ++count;
+            byStatus.append({statuses[i],count,statusColors[i]});
+        }
+        for(int i=0;i<types.size();++i) {
+            int count=0; for(int row=0;row<serviceTable->rowCount();++row) if(serviceTable->serviceAt(row).type==types[i]) ++count;
+            byType.append({types[i],count,typeColors[i]});
+        }
+        for(int i=0;i<priorities.size();++i) {
+            int count=0; for(int row=0;row<serviceTable->rowCount();++row) if(serviceTable->serviceAt(row).priority==priorities[i]) ++count;
+            byPriority.append({priorities[i],count,priorityColors[i]});
+        }
+        ServiceStatisticsDialog dialog(byStatus,byType,byPriority,window());
+        dialog.exec();
     }
     void adapt() {
         if(!detailGrid) return;
@@ -1166,6 +1948,35 @@ private:
 
 void setupServiceUi(QWidget *root)
 {
+    
+        initialiseServiceData();
+    
     root->setObjectName("servicesRoot"); auto *layout=new QHBoxLayout(root); layout->setContentsMargins(0,0,0,0); layout->setSpacing(0); layout->addWidget(new Sidebar); layout->addWidget(new ServicesPage(root),1);
     QFile stylesheet(":/styles/services.qss"); if(stylesheet.open(QIODevice::ReadOnly)) root->setStyleSheet(QString::fromUtf8(stylesheet.readAll()));
+}
+
+QWidget *createSkySenseSidebar(std::function<void(const QString &)> navigate,const QString &initialSection)
+{
+    auto *sidebar = new Sidebar(std::move(navigate),initialSection);
+    QFile stylesheet(":/styles/services.qss");
+    if(stylesheet.open(QIODevice::ReadOnly)) sidebar->setStyleSheet(QString::fromUtf8(stylesheet.readAll()));
+    return sidebar;
+}
+
+void setupServiceContent(QWidget *root)
+{
+    
+        initialiseServiceData();
+    
+    root->setObjectName("servicesContentRoot");
+    auto *layout=new QVBoxLayout(root); layout->setContentsMargins(0,0,0,0); layout->setSpacing(0);
+    auto *page=new ServicesPage(root);
+    page->setProperty("integratedMode",true);
+    layout->addWidget(page);
+    QFile stylesheet(":/styles/services.qss"); if(stylesheet.open(QIODevice::ReadOnly)) root->setStyleSheet(QString::fromUtf8(stylesheet.readAll()));
+}
+
+bool exportServicesReportPdf(const QString &filePath,QString *error)
+{
+    return writeServicesPdf(filePath,serviceRecords,error);
 }

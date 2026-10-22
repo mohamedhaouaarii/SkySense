@@ -56,6 +56,13 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 
 QDialog#addServiceDialog { background: #ffffff; border: 1px solid #dce9f8; border-radius: 10px; }
 QDialog#addServiceDialog { background: #f5f9ff; }
+QDialog#serviceStatisticsDialog { background: #f5f9ff; border: 1px solid #dce9f8; }
+QLabel[role="statsTitle"] { color: #080d2d; font-size: 25px; font-weight: 700; }
+QLabel[role="statsSubtitle"] { color: #5d77ad; font-size: 14px; }
+QLabel[role="statsChartTitle"] { color: #0b1f4a; font-size: 19px; font-weight: 700; }
+QLabel[role="statsTotal"] { color: #0b6bd6; font-size: 14px; font-weight: 700; }
+QLabel[role="statsCaption"], QLabel[role="statsFootnote"] { color: #5d739a; font-size: 13px; }
+QFrame#serviceStatisticsPanel { background: #ffffff; border: 1px solid #dfeaf7; border-radius: 13px; }
 QDialog#addServiceDialog QScrollArea, QDialog#addServiceDialog QScrollArea QWidget#qt_scrollarea_viewport { background: #f5f9ff; }
 QLabel#serviceFormPlus { background: #e3f0ff; color: #0785ff; border-radius: 33px; font-size: 42px; font-weight: 300; }
 QWidget#autoIdCard { background: #edf6ff; border: 1px solid #cfe3fb; border-radius: 13px; }

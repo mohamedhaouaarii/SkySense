@@ -1,5 +1,8 @@
 #include "skysensewindow.h"
+#include "connection.h"
+#include "apptheme.h"
 #include <QApplication>
+#include <QMessageBox>
 #include <QParallelAnimationGroup>
 #include <QPropertyAnimation>
 #include <QRect>
@@ -12,6 +15,14 @@ int main(int argc, char *argv[])
     app.setApplicationName("SkySense");
     app.setOrganizationName("CoreVision");
     app.setStyle("Fusion");
+    AppTheme::instance()->initialize();
+
+    // On recupere l instance unique du singleton
+    Connection &c = Connection::createInstance();
+
+    // On tente d etablir la connexion (ODBC / Oracle)
+    bool test = c.createConnection();
+
     SkySenseWindow window;
     const QRect available=app.primaryScreen()->availableGeometry();
     QSize targetSize(qMin(window.width(),available.width()-48),qMin(window.height(),available.height()-80));
@@ -31,6 +42,14 @@ int main(int argc, char *argv[])
     slide->setDuration(950); slide->setStartValue(startGeometry); slide->setEndValue(finalGeometry);
     slide->setEasingCurve(QEasingCurve::OutCubic);
     intro->start(QAbstractAnimation::DeleteWhenStopped);
+
+    //************************Test Connection BD**************************//
+    if (test) {
+        QMessageBox::information(nullptr, QObject::tr("Base de donnees"),
+                                 QObject::tr("Connexion reussie."), QMessageBox::Ok);
+    } else {
+        QMessageBox::critical(nullptr, QObject::tr("Base de donnees"),
+                              QObject::tr("Echec de la connexion."), QMessageBox::Ok);
+    }
     return app.exec();
 }
-
