@@ -1,0 +1,20 @@
+SkySense — Oracle
+=================
+
+Le projet Qt utilise la source ODBC 64 bits nommee SKYSENSE. Configure cette
+source avec le pilote Oracle 64 bits, le compte Oracle SKYSENSE et le service
+localhost:1521/XEPDB1. Le nom de connexion SQL Developer (par exemple
+« maintenance ») est independant du nom de la source ODBC.
+
+Avant la premiere execution, connecte-toi dans SQL Developer comme SKYSENSE sur
+XEPDB1 et execute une seule fois maintenance_schema.sql. Le guide complet est
+dans GUIDE_MAINTENANCE_ORACLE.txt.
+
+Ouvre ensuite SkySense.pro dans Qt Creator et choisis un kit Qt 6 64 bits avec
+le module Qt SQL et le pilote ODBC 64 bits compatible. SkySense charge la liste
+Maintenance depuis Oracle. En cas de table absente, l'application affiche le
+message Oracle. Le bouton Add ouvre toujours son formulaire; l'enregistrement
+attend l'installation du schema, puis le redemarrage de l'application.
+
+En mode --skip-oracle, des lignes de demonstration temporaires sont affichees;
+elles ne sont pas ecrites dans la base.

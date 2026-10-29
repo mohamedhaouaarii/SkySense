@@ -24,3 +24,13 @@ Steps
 If something fails, the app shows the Oracle error in a message box and the
 screen is NOT changed (so screen and database always match).
 With --skip-oracle the list shows demo rows and saving is refused (no connection).
+
+Atelier follow-up (what was added)
+  * servicemodel: validate() = controle de saisie in C++ (called by insert and update before any SQL)
+  * service_sqlplus.sql: database constraints (title not empty, priority, status). Run the script again once.
+
+Stations + Staff (atelier CRUD)
+  * NEW: stationmodel.h/.cpp, staffmodel.h/.cpp (afficher / ajouter / modifier / supprimer, prepared queries)
+  * NEW: stations_staff_sqlplus.sql  -> run once in SQL*Plus as SKYSENSE (tables + DB constraints)
+  * stationui.cpp / staffui.cpp: list read from Oracle at start-up; Add / Edit / Delete call the model.
+    If Oracle refuses, a message shows the error and the screen is not changed.

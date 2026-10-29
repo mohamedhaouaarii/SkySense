@@ -1,4 +1,4 @@
-QT += core gui widgets printsupport sql
+QT += core gui widgets multimedia printsupport sql
 CONFIG += c++17
 
 win32-g++: QMAKE_CXXFLAGS += -finput-charset=UTF-8 -fexec-charset=UTF-8
@@ -10,17 +10,49 @@ TARGET = SkySense
 SOURCES += \
     main.cpp \
     skysensewindow.cpp \
+    equipmentui.cpp \
+    equipmentdata.cpp \
+    equipment.cpp \
+    equipmentreport.cpp \
     serviceui.cpp \
-    servicemodel.cpp \
+    stationui.cpp \
+    maintenanceui.cpp \
+    mainwindow.cpp \
+    staffui.cpp \
+    staffdata.cpp \
+    appsession.cpp \
     connection.cpp \
-    apptheme.cpp
+    maintenancemodel.cpp \
+    servicemodel.cpp
 
 HEADERS += \
     skysensewindow.h \
+    equipmentui.h \
+    equipmentdata.h \
+    equipment.h \
     serviceui.h \
-    servicemodel.h \
+    stationui.h \
+    maintenanceui.h \
+    mainwindow.h \
+    staffui.h \
+    staffdata.h \
+    appsession.h \
     connection.h \
-    apptheme.h
+    intervention.h \
+    maintenancemodel.h \
+    servicemodel.h
 
 FORMS += skysensewindow.ui
 RESOURCES += resources.qrc
+
+
+contains(CONFIG, skysense_tests): DEFINES += SKYSENSE_UI_TESTS
+
+HEADERS += loginatmosphere.h
+
+SOURCES += apptheme.cpp
+HEADERS += apptheme.h
+
+# Stations + Staff Oracle models (atelier CRUD)
+SOURCES += stationmodel.cpp staffmodel.cpp
+HEADERS += stationmodel.h staffmodel.h

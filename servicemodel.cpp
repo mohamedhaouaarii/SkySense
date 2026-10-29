@@ -3,11 +3,13 @@
 #include "connection.h"
 
 #include <QDate>
+#include <QHash>
 #include <QLocale>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QVariant>
+#include <QVector>
 
 namespace {
 const QString dateFormat = QStringLiteral("MMM dd, yyyy");   // format used by the Service screen
@@ -57,7 +59,7 @@ void bindCommonValues(QSqlQuery &q, const ServiceRecord &r)
     q.addBindValue(r.type);
     q.addBindValue(r.stationCode);
     q.addBindValue(r.stationName);
-    q.addBindValue(r.assignee);
+    q.addBindValue(r.assignee.left(120));   // text copy of all assignees (column is 120 chars)
     q.addBindValue(parseScreenDate(r.date).toString(QStringLiteral("yyyy-MM-dd")));
     q.addBindValue(r.startTime);
     q.addBindValue(r.endTime);
@@ -68,8 +70,100 @@ void bindCommonValues(QSqlQuery &q, const ServiceRecord &r)
     q.addBindValue(doneToText(r.checklistDone));
     q.addBindValue(r.actualEndTime);
     q.addBindValue(r.stationId);
-    q.addBindValue(r.personnelId);
+    q.addBindValue(r.personnelIds.isEmpty() ? r.personnelId : r.personnelIds.first());
 }
+
+// Association "affecter": one service can be assigned to several people.
+// Table SKYSENSE_AFFECTER (SERVICE_ID, PERSONNEL_ID), created by service_sqlplus.sql.
+bool saveAssignees(QSqlDatabase &db, const ServiceRecord &r, QString *error)
+{
+    QSqlQuery del(db);
+    if (!del.prepare(QStringLiteral("DELETE FROM SKYSENSE_AFFECTER WHERE SERVICE_ID = ?"))) {
+        setSqlError(error, del);
+        return false;
+    }
+    del.addBindValue(r.id);
+    if (!del.exec()) {
+        setSqlError(error, del);
+        return false;
+    }
+    QVector<int> ids = r.personnelIds;
+    if (ids.isEmpty() && r.personnelId > 0)
+        ids.append(r.personnelId);
+    QVector<int> done;
+    for (int personnelId : ids) {
+        if (personnelId <= 0 || done.contains(personnelId))
+            continue;
+        done.append(personnelId);
+        QSqlQuery ins(db);
+        if (!ins.prepare(QStringLiteral(
+                "INSERT INTO SKYSENSE_AFFECTER (SERVICE_ID, PERSONNEL_ID) VALUES (?, ?)"))) {
+            setSqlError(error, ins);
+            return false;
+        }
+        ins.addBindValue(r.id);
+        ins.addBindValue(personnelId);
+        if (!ins.exec()) {
+            setSqlError(error, ins);
+            return false;
+        }
+    }
+    return true;
+}
+
+// Creates SKYSENSE_AFFECTER the first time it is needed (same as service_sqlplus.sql),
+// so nothing has to be run by hand. Existing services keep their single assignee.
+void ensureAffecterTable(QSqlDatabase &db)
+{
+    static bool checked = false;
+    if (checked)
+        return;
+    QSqlQuery q(db);
+    if (!q.exec(QStringLiteral("SELECT COUNT(*) FROM USER_TABLES WHERE TABLE_NAME = 'SKYSENSE_AFFECTER'")) || !q.next())
+        return;
+    if (q.value(0).toInt() == 0) {
+        QSqlQuery create(db);
+        if (!create.exec(QStringLiteral(
+                "CREATE TABLE SKYSENSE_AFFECTER ("
+                "SERVICE_ID VARCHAR2(30 CHAR) NOT NULL, "
+                "PERSONNEL_ID NUMBER(10) NOT NULL, "
+                "CONSTRAINT PK_SKYSENSE_AFFECTER PRIMARY KEY (SERVICE_ID, PERSONNEL_ID), "
+                "CONSTRAINT FK_AFFECTER_SERVICE FOREIGN KEY (SERVICE_ID) "
+                "REFERENCES SKYSENSE_SERVICES (SERVICE_ID) ON DELETE CASCADE)")))
+            return;   // saveAssignees() will report the problem
+        QSqlQuery copy(db);
+        copy.exec(QStringLiteral(
+            "INSERT INTO SKYSENSE_AFFECTER (SERVICE_ID, PERSONNEL_ID) "
+            "SELECT SERVICE_ID, PERSONNEL_ID FROM SKYSENSE_SERVICES "
+            "WHERE PERSONNEL_ID IS NOT NULL AND PERSONNEL_ID > 0"));
+    }
+    checked = true;
+}
+
+QString affecterHint(const QString &sqlError)
+{
+    return sqlError + QStringLiteral("\n\nThe assignees are stored in the table SKYSENSE_AFFECTER. "
+                                    "The app tries to create it automatically; if that is not allowed, run service_sqlplus.sql once in SQL*Plus.");
+}
+}
+
+QString ServiceModel::validate(const ServiceRecord &item)
+{
+    if (item.id.trimmed().isEmpty() || item.id.trimmed().size() > 30)
+        return QStringLiteral("The service ID is required (maximum 30 characters).");
+    if (item.title.trimmed().isEmpty() || item.title.trimmed().size() > 150)
+        return QStringLiteral("The service title is required (maximum 150 characters).");
+    if (item.type.size() > 50 || item.stationCode.size() > 30 || item.stationName.size() > 120)
+        return QStringLiteral("A field exceeds its maximum length.");
+    if (item.priority != QLatin1String("High") && item.priority != QLatin1String("Medium")
+        && item.priority != QLatin1String("Low"))
+        return QStringLiteral("Invalid service priority.");
+    if (item.status != QLatin1String("Scheduled") && item.status != QLatin1String("In Progress")
+        && item.status != QLatin1String("Completed") && item.status != QLatin1String("Overdue"))
+        return QStringLiteral("Invalid service status.");
+    if (item.startTime.size() > 8 || item.endTime.size() > 8 || item.actualEndTime.size() > 8)
+        return QStringLiteral("A time value is too long.");
+    return {};
 }
 
 bool ServiceModel::loadAll(QVector<ServiceRecord> &items, QString *error) const
@@ -114,7 +208,25 @@ bool ServiceModel::loadAll(QVector<ServiceRecord> &items, QString *error) const
         r.actualEndTime = q.value(14).toString();
         r.stationId = q.value(15).toInt();
         r.personnelId = q.value(16).toInt();
+        if (r.personnelId > 0)
+            r.personnelIds.append(r.personnelId);   // older rows: single assignee
         loaded.append(r);
+    }
+
+    // Every assignee of every service (table SKYSENSE_AFFECTER). If the table does not
+    // exist yet, the single PERSONNEL_ID of each row is used instead.
+    ensureAffecterTable(db);
+    QSqlQuery links(db);
+    if (links.exec(QStringLiteral("SELECT SERVICE_ID, PERSONNEL_ID FROM SKYSENSE_AFFECTER ORDER BY SERVICE_ID, PERSONNEL_ID"))) {
+        QHash<QString, QVector<int>> byService;
+        while (links.next())
+            byService[links.value(0).toString()].append(links.value(1).toInt());
+        for (ServiceRecord &r : loaded) {
+            if (byService.contains(r.id)) {
+                r.personnelIds = byService.value(r.id);
+                r.personnelId = r.personnelIds.first();
+            }
+        }
     }
 
     items = loaded;
@@ -125,6 +237,12 @@ bool ServiceModel::loadAll(QVector<ServiceRecord> &items, QString *error) const
 
 bool ServiceModel::insert(const ServiceRecord &item, QString *error) const
 {
+    const QString problem = validate(item);
+    if (!problem.isEmpty()) {
+        if (error)
+            *error = problem;
+        return false;
+    }
     QSqlDatabase db = connectedDatabase(error);
     if (!db.isValid())
         return false;
@@ -143,8 +261,32 @@ bool ServiceModel::insert(const ServiceRecord &item, QString *error) const
     // addBindValue is positional, so bind the ID first.
     q.addBindValue(item.id);
     bindCommonValues(q, item);
+    ensureAffecterTable(db);
+    const bool inTransaction = db.transaction();
     if (!q.exec()) {
         setSqlError(error, q);
+        if (inTransaction)
+            db.rollback();
+        return false;
+    }
+    QString linkError;
+    if (!saveAssignees(db, item, &linkError)) {
+        if (inTransaction)
+            db.rollback();
+        else {
+            QSqlQuery undo(db);
+            undo.prepare(QStringLiteral("DELETE FROM SKYSENSE_SERVICES WHERE SERVICE_ID = ?"));
+            undo.addBindValue(item.id);
+            undo.exec();
+        }
+        if (error)
+            *error = affecterHint(linkError);
+        return false;
+    }
+    if (inTransaction && !db.commit()) {
+        if (error)
+            *error = db.lastError().text();
+        db.rollback();
         return false;
     }
     if (error)
@@ -154,6 +296,12 @@ bool ServiceModel::insert(const ServiceRecord &item, QString *error) const
 
 bool ServiceModel::update(const ServiceRecord &item, QString *error) const
 {
+    const QString problem = validate(item);
+    if (!problem.isEmpty()) {
+        if (error)
+            *error = problem;
+        return false;
+    }
     QSqlDatabase db = connectedDatabase(error);
     if (!db.isValid())
         return false;
@@ -170,13 +318,33 @@ bool ServiceModel::update(const ServiceRecord &item, QString *error) const
     }
     bindCommonValues(q, item);
     q.addBindValue(item.id);
+    ensureAffecterTable(db);
+    const bool inTransaction = db.transaction();
     if (!q.exec()) {
         setSqlError(error, q);
+        if (inTransaction)
+            db.rollback();
         return false;
     }
     if (q.numRowsAffected() == 0) {
         if (error)
             *error = QStringLiteral("The service no longer exists in Oracle.");
+        if (inTransaction)
+            db.rollback();
+        return false;
+    }
+    QString linkError;
+    if (!saveAssignees(db, item, &linkError)) {
+        if (inTransaction)
+            db.rollback();
+        if (error)
+            *error = affecterHint(linkError);
+        return false;
+    }
+    if (inTransaction && !db.commit()) {
+        if (error)
+            *error = db.lastError().text();
+        db.rollback();
         return false;
     }
     if (error)
@@ -190,6 +358,13 @@ bool ServiceModel::remove(const QString &id, QString *error) const
     if (!db.isValid())
         return false;
 
+    {   // remove the assignee links first (ignored if the table does not exist yet)
+        QSqlQuery links(db);
+        if (links.prepare(QStringLiteral("DELETE FROM SKYSENSE_AFFECTER WHERE SERVICE_ID = ?"))) {
+            links.addBindValue(id);
+            links.exec();
+        }
+    }
     QSqlQuery q(db);
     if (!q.prepare(QStringLiteral("DELETE FROM SKYSENSE_SERVICES WHERE SERVICE_ID = ?"))) {
         setSqlError(error, q);

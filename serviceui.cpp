@@ -25,10 +25,15 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
-#include <QLineEdit>
+#include <QRegularExpression>
+#include <QRegularExpressionValidator>
 #include <QList>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QWheelEvent>
+#include <QStandardItemModel>
+#include <QStylePainter>
+#include <QStyleOptionComboBox>
 #include <QPainter>
 #include <QPixmap>
 #include <QPainterPath>
@@ -171,6 +176,36 @@ QComboBox *selector(const QStringList &values)
 {
     auto *combo=new Selector; combo->addItems(values); combo->setFixedHeight(48); combo->setMinimumWidth(118); return combo;
 }
+
+// Multi-select "assignee" field: an always-visible checklist. Tick ONE person or SEVERAL.
+class AssigneePicker final : public QScrollArea {
+    QVBoxLayout *rows=nullptr;
+    QList<QCheckBox *> boxes;
+public:
+    explicit AssigneePicker(QWidget *parent=nullptr):QScrollArea(parent) {
+        setObjectName("assigneePicker"); setWidgetResizable(true); setFixedHeight(122); setMinimumWidth(118);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        setStyleSheet("QScrollArea#assigneePicker{background:white;border:1px solid #c9def7;border-radius:10px;} QScrollArea#assigneePicker QWidget#assigneeRows{background:white;} QScrollArea#assigneePicker QCheckBox{padding:3px 4px;color:#091b40;}");
+        auto *content=new QWidget; content->setObjectName("assigneeRows");
+        rows=new QVBoxLayout(content); rows->setContentsMargins(10,6,10,6); rows->setSpacing(2); rows->addStretch();
+        setWidget(content);
+    }
+    void addPerson(int id,const QString &name) {
+        auto *box=new QCheckBox(name); box->setProperty("personId",id); box->setCursor(Qt::PointingHandCursor);
+        boxes.append(box); rows->insertWidget(rows->count()-1,box);
+    }
+    QVector<int> checkedIds() const {
+        QVector<int> ids; for(const QCheckBox *box:boxes) if(box->isChecked()) ids.append(box->property("personId").toInt());
+        return ids;
+    }
+    QStringList checkedNames() const {
+        QStringList names; for(const QCheckBox *box:boxes) if(box->isChecked()) names.append(box->text());
+        return names;
+    }
+    void setCheckedIds(const QVector<int> &ids) {
+        for(QCheckBox *box:boxes) box->setChecked(ids.contains(box->property("personId").toInt()));
+    }
+};
 
 class ServiceReportCalendar final : public QCalendarWidget {
 protected:
@@ -373,7 +408,7 @@ void initialiseServiceData()
         record.id=id; record.title=title; record.type=type;
         const auto station=serviceStationChoices.at(stationIndex); const auto person=servicePersonChoices.at(personIndex);
         record.stationCode=station.code; record.stationName=station.name; record.stationId=station.id;
-        record.assignee=person.name; record.personnelId=person.id;
+        record.assignee=person.name; record.personnelId=person.id; record.personnelIds={person.id};
         record.date=date; record.startTime="09:00"; record.endTime="12:00";
         record.priority=priority; record.status=status; record.quantity=1; record.unitPrice=price;
         record.description=title+" at "+station.name;
@@ -607,11 +642,12 @@ public:
             font.setBold(true); p->setFont(font); p->drawText(r.adjusted(8,3,-3,-r.height()/2+2),Qt::AlignVCenter,record.stationCode);
             font.setBold(false); p->setFont(font); p->setPen(AppTheme::pen(*p, muted)); p->drawText(r.adjusted(8,r.height()/2-1,-3,-3),Qt::AlignVCenter,record.stationName);
         } else if(col==5) {
-            const QString initials=record.assignee.split(' ').value(0).left(1)+record.assignee.split(' ').value(1).left(1);
+            const QStringList people=record.assigneeList(); const QString firstPerson=people.value(0);
+            const QString initials=firstPerson.split(' ').value(0).left(1)+firstPerson.split(' ').value(1).left(1);
             const QColor avatar[]={QColor("#e3efff"),QColor("#fbe9e1"),QColor("#e8e4fb"),QColor("#f8e9f0"),QColor("#e5f5ec"),QColor("#f2eddf")};
             p->setPen(AppTheme::pen(*p, Qt::NoPen)); p->setBrush(AppTheme::brush(*p, avatar[row%6])); p->drawEllipse(QRectF(r.left()+7,r.center().y()-13,26,26));
             p->setPen(AppTheme::pen(*p, QColor("#28517c"))); p->drawText(QRectF(r.left()+7,r.center().y()-13,26,26),Qt::AlignCenter,initials);
-            p->setPen(AppTheme::pen(*p, navy)); p->drawText(r.adjusted(39,0,-2,0),Qt::AlignVCenter,record.assignee);
+            p->setPen(AppTheme::pen(*p, navy)); p->drawText(r.adjusted(39,0,-2,0),Qt::AlignVCenter,people.size()>1?firstPerson+QString("  +%1").arg(people.size()-1):firstPerson);
         } else if(col==6) {
             p->save(); p->translate(r.left()+7,r.center().y()-10); symbol(*p,"calendar",muted); p->restore();
             p->setPen(AppTheme::pen(*p, muted)); p->drawText(r.adjusted(34,3,-2,-r.height()/2+1),Qt::AlignVCenter,record.date);
@@ -804,6 +840,7 @@ private:
         for(int column=0;column<10;++column) {
             auto *item=new QTableWidgetItem(values[column]);
             if(column==0) { item->setCheckState(Qt::Unchecked); item->setFlags(Qt::ItemIsEnabled); }
+            if(column==5) item->setToolTip(record.assignee);
             setItem(row,column,item);
         }
     }
@@ -1059,7 +1096,8 @@ bool confirmDeleteService(QWidget *parent,const ServiceRecord &record);
 
 class AddServiceDialog final : public QDialog {
     QLineEdit *idEdit=nullptr,*titleEdit=nullptr;
-    QComboBox *typeCombo=nullptr,*stationCombo=nullptr,*assigneeCombo=nullptr,*priorityCombo=nullptr,*statusCombo=nullptr;
+    QComboBox *typeCombo=nullptr,*stationCombo=nullptr,*priorityCombo=nullptr,*statusCombo=nullptr;
+    AssigneePicker *assigneeCombo=nullptr;
     QDateEdit *dateEdit=nullptr;
     QTimeEdit *startEdit=nullptr,*endEdit=nullptr;
     QTimeEdit *actualEndEdit=nullptr;
@@ -1109,17 +1147,8 @@ public:
         headingCopy->addWidget(text(editingMode?"Edit Service":"Add Service","dialogTitle"));
         headingCopy->addWidget(text(editingMode?"Update the details of this field service.":"Register and schedule a new field service.","dialogSubtitle"));
         heading->addLayout(headingCopy,1);
-        auto *idCard=new QWidget;
-        idCard->setObjectName("autoIdCard");
-        auto *idLayout=new QVBoxLayout(idCard);
-        idLayout->setContentsMargins(16,9,16,9);
-        idLayout->setSpacing(2);
-        idLayout->addWidget(text(editingMode?"SERVICE ID":"AUTO ID","smallMuted"));
-        idEdit=new QLineEdit(existing?existing->id:nextServiceId());
-        idEdit->setObjectName("serviceAutoId");
-        idEdit->setReadOnly(true);
-        idLayout->addWidget(idEdit);
-        heading->addWidget(idCard,0,Qt::AlignVCenter);
+        // The service ID is typed by the user in the small box next to "Service details" (see below).
+        idEdit=new QLineEdit(existing?existing->id:QString());
         root->addLayout(heading);
 
         auto *divider=new QFrame;
@@ -1137,7 +1166,20 @@ public:
         auto *cardLayout=new QVBoxLayout(card);
         cardLayout->setContentsMargins(24,22,24,22);
         cardLayout->setSpacing(14);
-        cardLayout->addWidget(text("Service details","serviceCardTitle"));
+        {
+            auto *titleRow=new QHBoxLayout; titleRow->setContentsMargins(0,0,0,0); titleRow->setSpacing(10);
+            titleRow->addWidget(text("Service details","serviceCardTitle")); titleRow->addStretch();
+            titleRow->addWidget(text("ID","smallMuted"));
+            idEdit->setObjectName("serviceIdBox");
+            idEdit->setPlaceholderText("Enter ID");
+            idEdit->setMaxLength(30);
+            idEdit->setFixedSize(150,38);
+            idEdit->setReadOnly(editingMode);   // the ID is the key of the service: it cannot change when editing
+            // letters, digits, "-" and "_" only
+            idEdit->setValidator(new QRegularExpressionValidator(QRegularExpression(QStringLiteral("[A-Za-z0-9_-]*")),idEdit));
+            titleRow->addWidget(idEdit);
+            cardLayout->addLayout(titleRow);
+        }
         cardLayout->addWidget(text(editingMode?"Review and update the service assignment, schedule, and status.":"Choose the service type, station, schedule, and status.","dialogSubtitle"));
 
         auto *detailsGrid=new QGridLayout;
@@ -1146,6 +1188,8 @@ public:
         detailsGrid->setVerticalSpacing(14);
         titleEdit=new QLineEdit;
         titleEdit->setPlaceholderText("Enter service title");
+        // Letters (including accented ones) and spaces only: no digits, no symbols such as @ - + / %
+        titleEdit->setValidator(new QRegularExpressionValidator(QRegularExpression(QStringLiteral("[\\p{L} ]*")),titleEdit));
         typeCombo=selector({"Maintenance","Calibration","Inspection","Repair","Connectivity","Software"});
         stationCombo=selector({"Select station"});
         for(const auto &station:serviceStationChoices) {
@@ -1155,8 +1199,8 @@ public:
             stationCombo->setItemData(index,station.name,Qt::UserRole+1);
             stationCombo->setItemData(index,station.id,Qt::UserRole+2);
         }
-        assigneeCombo=selector({"Select assignee"});
-        for(const auto &person:servicePersonChoices) { assigneeCombo->addItem(person.name); assigneeCombo->setItemData(assigneeCombo->count()-1,person.id,Qt::UserRole); }
+        assigneeCombo=new AssigneePicker;   // one service can have several assignees
+        for(const auto &person:servicePersonChoices) assigneeCombo->addPerson(person.id,person.name);
         dateEdit=new QDateEdit(QDate::currentDate()); dateEdit->setDisplayFormat("MMM dd, yyyy"); dateEdit->setCalendarPopup(true); dateEdit->setFixedHeight(48);
         startEdit=new QTimeEdit(QTime(8,0)); startEdit->setDisplayFormat("HH:mm"); startEdit->setFixedHeight(48);
         endEdit=new QTimeEdit(QTime(10,0)); endEdit->setDisplayFormat("HH:mm"); endEdit->setFixedHeight(48);
@@ -1168,7 +1212,11 @@ public:
             titleEdit->setText(existing->title);
             typeCombo->setCurrentText(existing->type);
             for(int i=1;i<stationCombo->count();++i) if(stationCombo->itemData(i,Qt::UserRole).toString()==existing->stationCode) stationCombo->setCurrentIndex(i);
-            assigneeCombo->setCurrentText(existing->assignee);
+            {
+                QVector<int> ids=existing->personnelIds;
+                if(ids.isEmpty() && existing->personnelId>0) ids.append(existing->personnelId);
+                assigneeCombo->setCheckedIds(ids);
+            }
             const QDate savedDate=QDate::fromString(existing->date,"MMM dd, yyyy"); if(savedDate.isValid()) dateEdit->setDate(savedDate);
             const QTime savedStart=QTime::fromString(existing->startTime,"HH:mm"); if(savedStart.isValid()) startEdit->setTime(savedStart);
             const QTime savedEnd=QTime::fromString(existing->endTime,"HH:mm"); if(savedEnd.isValid()) endEdit->setTime(savedEnd);
@@ -1180,7 +1228,7 @@ public:
         detailsGrid->addWidget(formField("Title",titleEdit),0,0);
         detailsGrid->addWidget(formField("Type",typeCombo),0,1);
         detailsGrid->addWidget(formField("Station",stationCombo),1,0);
-        detailsGrid->addWidget(formField("Assignee",assigneeCombo),1,1);
+        detailsGrid->addWidget(formField("Assignees",assigneeCombo),1,1);
         detailsGrid->addWidget(formField("Scheduled Date",dateEdit),2,0);
         detailsGrid->addWidget(formField("Start Time",startEdit),2,1);
         detailsGrid->addWidget(formField("End Time",endEdit),2,2);
@@ -1323,8 +1371,9 @@ public:
         record.stationCode=stationCombo->currentData(Qt::UserRole).toString();
         record.stationName=stationCombo->currentData(Qt::UserRole+1).toString();
         record.stationId=stationCombo->currentData(Qt::UserRole+2).toInt();
-        record.assignee=assigneeCombo->currentText();
-        record.personnelId=assigneeCombo->currentData(Qt::UserRole).toInt();
+        record.assignee=assigneeCombo->checkedNames().join(", ");
+        record.personnelIds=assigneeCombo->checkedIds();
+        record.personnelId=record.personnelIds.isEmpty()?0:record.personnelIds.first();
         record.date=dateEdit->date().toString("MMM dd, yyyy");
         record.startTime=startEdit->time().toString("HH:mm");
         record.endTime=endEdit->time().toString("HH:mm");
@@ -1386,9 +1435,14 @@ private:
         addChecklistButton->setText(count<3?"Add checklist item": "Maximum of 3 checklist tasks");
     }
     void createService() {
+        if(idEdit->text().trimmed().isEmpty()) { QMessageBox::warning(this,"Service ID required","Enter an ID for this service."); idEdit->setFocus(); return; }
+        if(!editingMode) {
+            for(const auto &record:serviceRecords) if(record.id.compare(idEdit->text().trimmed(),Qt::CaseInsensitive)==0) { QMessageBox::warning(this,"ID already used","A service with this ID already exists. Enter a different ID."); idEdit->setFocus(); return; }
+        }
         if(titleEdit->text().trimmed().isEmpty()) { QMessageBox::warning(this,"Service title required","Enter a title for this service."); titleEdit->setFocus(); return; }
+        if(!QRegularExpression(QStringLiteral("^[\\p{L} ]+$")).match(titleEdit->text().trimmed()).hasMatch()) { QMessageBox::warning(this,"Invalid service title","The title can only contain letters and spaces."); titleEdit->setFocus(); return; }
         if(stationCombo->currentIndex()==0) { QMessageBox::warning(this,"Station required","Select a weather station for this service."); stationCombo->setFocus(); return; }
-        if(assigneeCombo->currentIndex()==0) { QMessageBox::warning(this,"Assignee required","Select a staff member to assign this service to."); assigneeCombo->setFocus(); return; }
+        if(assigneeCombo->checkedIds().isEmpty()) { QMessageBox::warning(this,"Assignee required","Select at least one staff member to assign this service to."); assigneeCombo->setFocus(); return; }
         if(endEdit->time()<=startEdit->time()) { QMessageBox::warning(this,"Schedule time invalid","End time must be later than start time."); endEdit->setFocus(); return; }
         if(statusCombo->currentText()=="Completed" && actualEndEdit->time()<=startEdit->time()) { QMessageBox::warning(this,"Actual end time invalid","The actual end time must be later than the start time."); actualEndEdit->setFocus(); return; }
         if(checklistLayout->count()==0) { QMessageBox::warning(this,"Checklist required","Add at least one local checklist task before saving this service."); return; }
@@ -1494,7 +1548,7 @@ public:
         addValue("Title",record.title,0,1);
         addValue("Type",record.type,1,0);
         addValue("Station",record.stationCode+" — "+record.stationName,1,1);
-        addValue("Assignee",record.assignee,2,0,2);
+        addValue(record.personnelIds.size()>1?"Assignees":"Assignee",record.assignee,2,0,2);
         detailsLayout->addLayout(grid);
         auto *scheduleDivider=new QFrame; scheduleDivider->setProperty("role","formSeparator"); scheduleDivider->setFixedHeight(1); detailsLayout->addWidget(scheduleDivider);
         auto *schedule=new QGridLayout;

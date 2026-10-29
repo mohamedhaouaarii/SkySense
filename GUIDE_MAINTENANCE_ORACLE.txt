@@ -1,0 +1,97 @@
+SKYSENSE — CRUD MAINTENANCE AVEC ORACLE
+========================================
+
+Ton ZIP contient un projet Qt. SQL Developer ne sert pas à ouvrir les fichiers
+C++ : il sert ici à créer les tables Oracle. Le projet s'ouvre dans Qt Creator.
+
+1. Extraire le ZIP
+------------------
+Dans l'Explorateur Windows, clic droit sur SkySense-Maintenance-Oracle.zip,
+puis « Extraire tout ». Garde ensemble tous les fichiers extraits.
+
+2. Préparer la table dans SQL Developer — une seule fois
+--------------------------------------------------------
+La connexion SQL Developer peut s'appeler « maintenance » : ce nom est
+seulement un nom d'affichage. Ouvre ses propriétés et vérifie que l'utilisateur
+est SKYSENSE, l'hôte localhost, le port 1521 et le service XEPDB1.
+
+Ouvre le fichier maintenance_schema.sql du dossier extrait dans SQL Developer.
+Dans la feuille SQL, sélectionne la connexion SKYSENSE, puis exécute le script
+entier avec F5 (Exécuter le script). Le résultat doit indiquer que la séquence
+et la table ont été créées. Fais cette étape une seule fois.
+
+Pour vérifier, exécute ensuite :
+
+    SELECT USER FROM DUAL;
+    SELECT COUNT(*) FROM MAINTENANCE_INTERVENTION;
+
+La première requête doit afficher SKYSENSE. La deuxième affiche 0 avant le
+premier ajout. Ne lance pas le script sous SYS ou SYSTEM.
+
+Pour créer aussi les tables vides des autres sections (Stations, Equipment,
+Staff et Services), ouvre other_modules_schema.sql sous la même connexion
+SKYSENSE/XEPDB1 et exécute-le une fois avec F5. Ces tables apparaissent dans
+Oracle, mais les autres pages Qt ne les utilisent pas pour leurs opérations.
+Actualise le dossier Tables dans SQL Developer. Pour vérifier, exécute :
+
+    SELECT TABLE_NAME FROM USER_TABLES
+    WHERE TABLE_NAME IN ('SKYSENSE_STATIONS', 'SKYSENSE_EQUIPMENT',
+                         'SKYSENSE_STAFF', 'SKYSENSE_SERVICES')
+    ORDER BY TABLE_NAME;
+
+Tu dois obtenir quatre lignes. Si le panneau indique « Tables (filtré) »,
+un filtre masque certains noms; la requête ci-dessus permet de vérifier sans
+le panneau.
+
+3. Vérifier la source ODBC utilisée par Qt
+------------------------------------------
+Dans « Sources de données ODBC (64 bits) », la source doit avoir le nom
+SKYSENSE, le pilote Oracle 64 bits, l'utilisateur SKYSENSE et le service
+localhost:1521/XEPDB1. Le test de connexion doit réussir. Le nom de la connexion
+dans SQL Developer et le nom de la source ODBC sont indépendants.
+
+4. Ouvrir et démarrer le dossier dans Qt Creator
+------------------------------------------------
+Dans Qt Creator, choisis Fichier > Ouvrir un fichier ou un projet, puis ouvre
+SkySense.pro dans le dossier extrait. Sélectionne un kit Qt 6 64 bits qui
+correspond au compilateur du projet et au pilote ODBC 64 bits. Le kit Qt 6.7.3
+MinGW 64 bits a été utilisé pour compiler cette copie. Clique sur
+« Configure Project », puis lance la compilation et l'application.
+Si tu avais déjà compilé une ancienne copie, ouvre cette version corrigée et
+choisis Build > Rebuild Project pour ne pas relancer l'ancien exécutable.
+
+Au démarrage, SkySense utilise la source ODBC SKYSENSE et le compte Oracle
+SKYSENSE. Si la table est prête, la liste Maintenance vient d'Oracle; les ajouts,
+modifications et suppressions y sont enregistrés.
+
+5. Utiliser et vérifier le CRUD Maintenance
+-------------------------------------------
+• « Add intervention » : saisir les champs et cliquer Save. L'intervention est
+  créée dans Oracle.
+• « Edit » : modifier l'intervention et cliquer Save. La ligne Oracle est mise
+  à jour.
+• « Delete » : confirmer la suppression. La ligne Oracle est supprimée.
+• Dans la fiche, modifier les cases d'action ou le rapport, puis cliquer
+  « Save notes & actions ». « Mark as completed » exige un rapport et enregistre
+  aussi le nouvel état et les dates réelles.
+
+Dans SQL Developer, vérifie les résultats avec :
+
+    SELECT ID, TITLE, STATUS, PLANNED_START
+    FROM MAINTENANCE_INTERVENTION
+    ORDER BY PLANNED_START;
+
+6. En cas de problème
+---------------------
+• ORA-12154 dans SQL Developer : vérifie le service XEPDB1, l'hôte localhost et
+  le port 1521 dans les propriétés de cette connexion.
+• « Maintenance table not ready » dans SkySense : exécute une fois
+  maintenance_schema.sql sous SKYSENSE/XEPDB1, puis redémarre SkySense.
+  Le formulaire Add s'ouvre; Oracle refuse seulement l'enregistrement tant que
+  la table n'existe pas.
+• Le mode --skip-oracle affiche des données d'aperçu temporaires; elles ne sont
+  pas enregistrées dans Oracle.
+
+Le modèle de maintenance est dans maintenancemodel.cpp : les opérations SQL y
+sont préparées et les valeurs sont liées séparément. La fenêtre appelle ce modèle;
+les requêtes SQL ne sont pas écrites dans les actions des boutons.
