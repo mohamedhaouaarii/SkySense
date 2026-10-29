@@ -1,0 +1,30 @@
+
+Proc�dure PL/SQL termin�e avec succ�s.
+
+
+Proc�dure PL/SQL termin�e avec succ�s.
+
+
+D�clencheur cr��.
+
+Pas d'erreur.
+
+Proc�dure PL/SQL termin�e avec succ�s.
+
+Staff automatic IDs ready. Existing IDs retained.
+PASS: sequence retained; 12 original Staff IDs retained.
+
+Proc�dure PL/SQL termin�e avec succ�s.
+
+
+OBJECT_NAME
+--------------------------------------------------------------------------------
+STATUS
+-------
+SS_STAFF_MEMBER_BI
+VALID
+
+SS_STAFF_MEMBER_SEQ
+VALID
+
+

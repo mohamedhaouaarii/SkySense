@@ -1,0 +1,10 @@
+SkySense Weather Orbit — version Maintenance Oracle
+
+1. Lis GUIDE_MAINTENANCE_ORACLE.txt.
+2. Exécute maintenance_schema.sql une seule fois dans SQL Developer sous
+   SKYSENSE/XEPDB1.
+3. Pour créer aussi les tables vides des sections Stations, Equipment, Staff
+   et Services, exécute other_modules_schema.sql une fois sous SKYSENSE/XEPDB1.
+4. Ouvre SkySense.pro dans Qt Creator avec un kit Qt 6 64 bits compatible ODBC.
+5. Le CRUD de maintenance est enregistré dans Oracle. Les tables des autres
+   modules existent dans Oracle mais leurs pages Qt ne font pas de CRUD Oracle.

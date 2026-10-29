@@ -1,0 +1,16 @@
+********* Start testing of IntegrationTests *********
+Config: Using QtTest library 6.7.3, Qt 6.7.3 (x86_64-little_endian-llp64 shared (dynamic) release build; by GCC 11.2.0), windows 11
+QDEBUG : IntegrationTests::initTestCase() Connexion Oracle etablie.
+PASS   : IntegrationTests::initTestCase()
+QWARN  : IntegrationTests::integratedNavigationAndStaff() QPainter::begin: A paint device can only be painted by one painter at a time.
+QWARN  : IntegrationTests::integratedNavigationAndStaff() QPainter::translate: Painter not active
+QWARN  : IntegrationTests::integratedNavigationAndStaff() QPainter::begin: A paint device can only be painted by one painter at a time.
+QWARN  : IntegrationTests::integratedNavigationAndStaff() QPainter::translate: Painter not active
+QWARN  : IntegrationTests::integratedNavigationAndStaff() QPainter::begin: A paint device can only be painted by one painter at a time.
+QWARN  : IntegrationTests::integratedNavigationAndStaff() QPainter::translate: Painter not active
+QWARN  : IntegrationTests::integratedNavigationAndStaff() QPainter::begin: A paint device can only be painted by one painter at a time.
+QWARN  : IntegrationTests::integratedNavigationAndStaff() QPainter::translate: Painter not active
+PASS   : IntegrationTests::integratedNavigationAndStaff()
+PASS   : IntegrationTests::cleanupTestCase()
+Totals: 3 passed, 0 failed, 0 skipped, 0 blacklisted, 2354ms
+********* Finished testing of IntegrationTests *********

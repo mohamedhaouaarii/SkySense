@@ -1,0 +1,38 @@
+<RCC>
+ <qresource prefix="/">
+  <file>styles/skysense.qss</file>
+  <file>styles/equipment.qss</file>
+  <file>styles/services.qss</file>
+  <file>styles/station.qss</file>
+  <file>assets/backgrounds/login_background.jpg</file>
+  <file>assets/backgrounds/login_background.png</file>
+  <file>assets/backgrounds/services_alps.png</file>
+  <file>assets/logo/skysense_logo.png</file>
+  <file>assets/logo/skysense_logo_login_hd.png</file>
+  <file>assets/sounds/ui_click.wav</file>
+  <file alias="sounds/button_click.wav">assets/sounds/button_click.wav</file>
+  <file>assets/stations/network_map.png</file>
+  <file>assets/stations/station_01.png</file>
+  <file>assets/stations/station_02.png</file>
+  <file>assets/stations/station_03.png</file>
+  <file>assets/stations/station_04.png</file>
+  <file>assets/stations/station_05.png</file>
+  <file>assets/stations/station_06.png</file>
+  <file>assets/stations/station_07.png</file>
+  <file>assets/stations/station_08.png</file>
+  <file alias="assets/reference.png">assets/staff/reference.png</file>
+  <file alias="assets/skysense_logo.png">assets/staff/skysense_logo.png</file>
+  <file>styles/staff.qss</file>
+ </qresource>
+ <qresource prefix="/images">
+  <file alias="background.jpg">assets/maintenance/background.jpg</file>
+  <file alias="logo_light.png">assets/maintenance/logo_light.png</file>
+  <file alias="logo.png">assets/maintenance/logo.png</file>
+  <file alias="mountain.jpg">assets/maintenance/mountain.jpg</file>
+  <file alias="station.jpg">assets/maintenance/station.jpg</file>
+  <file alias="weather_landscape.png">assets/maintenance/weather_landscape.png</file>
+ </qresource>
+ <qresource prefix="/sounds">
+  <file alias="click.wav">assets/maintenance/click.wav</file>
+ </qresource>
+</RCC>

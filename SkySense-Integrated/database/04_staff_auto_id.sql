@@ -1,0 +1,49 @@
+-- Staff only. Run as SKYSENSE on XEPDB1, after schema creation and optional import.
+-- Existing members and their IDs are never changed.
+SET DEFINE OFF
+SET SERVEROUTPUT ON
+WHENEVER SQLERROR EXIT SQL.SQLCODE ROLLBACK
+DECLARE
+    sequence_count PLS_INTEGER;
+    first_number NUMBER;
+BEGIN
+    IF USER <> 'SKYSENSE' THEN
+        RAISE_APPLICATION_ERROR(-20001, 'Connect as SKYSENSE on XEPDB1.');
+    END IF;
+    SELECT COUNT(*) INTO sequence_count FROM USER_SEQUENCES
+    WHERE SEQUENCE_NAME='SS_STAFF_MEMBER_SEQ';
+    IF sequence_count=0 THEN
+        SELECT NVL(MAX(TO_NUMBER(REGEXP_SUBSTR(STAFF_ID, '[0-9]+$'))),0)+1
+        INTO first_number FROM SS_STAFF_MEMBER
+        WHERE REGEXP_LIKE(STAFF_ID, '^STF-[0-9]{4}-[0-9]+$');
+        EXECUTE IMMEDIATE 'CREATE SEQUENCE SS_STAFF_MEMBER_SEQ START WITH '
+            || TO_CHAR(first_number, 'FM9999999999999999999')
+            || ' INCREMENT BY 1 MAXVALUE 999999999999999999 NOCACHE NOCYCLE';
+    END IF;
+END;
+/
+-- Also allocate an ID for SQL inserts that omit STAFF_ID.
+CREATE OR REPLACE TRIGGER SS_STAFF_MEMBER_BI
+BEFORE INSERT ON SS_STAFF_MEMBER
+FOR EACH ROW
+WHEN (NEW.STAFF_ID IS NULL)
+DECLARE
+    sequence_text VARCHAR2(30);
+BEGIN
+    sequence_text := TO_CHAR(SS_STAFF_MEMBER_SEQ.NEXTVAL, 'FM9999999999999999999');
+    :NEW.STAFF_ID := 'STF-' || TO_CHAR(SYSDATE,'YYYY') || '-'
+        || LPAD(sequence_text, GREATEST(3,LENGTH(sequence_text)), '0');
+END;
+/
+SHOW ERRORS TRIGGER SS_STAFF_MEMBER_BI
+DECLARE
+    error_count PLS_INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO error_count FROM USER_ERRORS
+    WHERE NAME='SS_STAFF_MEMBER_BI' AND TYPE='TRIGGER';
+    IF error_count>0 THEN
+        RAISE_APPLICATION_ERROR(-20002, 'Staff ID trigger failed to compile.');
+    END IF;
+END;
+/
+PROMPT Staff automatic IDs ready. Existing IDs retained.

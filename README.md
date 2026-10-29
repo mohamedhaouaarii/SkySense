@@ -1,3 +1,32 @@
+# SkySense - version integree avec Staff Oracle
+
+La version integree utilisee et verifiee par Donia se trouve dans
+[`SkySense-Integrated/`](SkySense-Integrated/).
+
+**Projet a ouvrir dans Qt Creator :
+[`SkySense-Integrated/SkySense.pro`](SkySense-Integrated/SkySense.pro).**
+
+Cette version regroupe la navigation commune et les pages Dashboard, Stations,
+Equipment, Maintenance, Staff et Services. Le module Staff utilise la classe
+`Personnel` pour son CRUD Oracle et la connexion `Connection` en Meyers Singleton.
+
+- [Installation, connexion et fonctionnement](SkySense-Integrated/README.md)
+- [Scripts Oracle et identifiants Staff automatiques](SkySense-Integrated/database/)
+- [Organisation du travail selon les ateliers](SkySense-Integrated/STAFF_ATELIER.md)
+- [Validation technique et limites connues](SkySense-Integrated/VALIDATION.md)
+- [Verification manuelle du CRUD et du PDF](SkySense-Integrated/docs/verification-20261029.md)
+
+Compiler avec Qt 6.7.3 / MinGW 64 bits. La source ODBC et l'utilisateur Oracle sont
+`SKYSENSE`; le service local est `localhost:1521/xepdb1`. Le mot de passe Oracle
+est saisi au demarrage. Les scripts SQL sont fournis pour preparer la base sur
+un autre poste; les fichiers internes de la base locale ne font pas partie du depot.
+
+Les dossiers historiques restent disponibles : le projet a la racine correspond
+aux anciennes instructions Equipment ci-dessous, et `staff/` a la version Staff
+precedente. Pour le travail integre actuel, utiliser le projet indique ci-dessus.
+
+---
+
 # SkySense — interface Equipment
 
 Projet de démonstration de l’interface de gestion des équipements météo SkySense, réalisé en C++ avec Qt Widgets.

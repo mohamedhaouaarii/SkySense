@@ -1,0 +1,11 @@
+QT += core gui widgets printsupport sql testlib
+CONFIG += c++17 console testcase
+CONFIG -= app_bundle
+TEMPLATE = app
+TARGET = skysense_integration_tests
+INCLUDEPATH += ..
+win32:LIBS += -lwinmm
+SOURCES += tst_integration.cpp ../appsession.cpp ../apptheme.cpp ../clicksound.cpp ../connection.cpp ../equipment.cpp ../equipmentdata.cpp ../equipmentreport.cpp ../equipmentui.cpp ../maintenancemodel.cpp ../maintenanceui.cpp ../mainwindow.cpp ../personnel.cpp ../servicemodel.cpp ../serviceui.cpp ../skysensewindow.cpp ../staffdata.cpp ../stafftraining.cpp ../stafftrainingdialog.cpp ../staffui.cpp ../stationui.cpp
+HEADERS += ../appsession.h ../apptheme.h ../clicksound.h ../connection.h ../equipment.h ../equipmentdata.h ../equipmentui.h ../intervention.h ../loginatmosphere.h ../maintenancemodel.h ../maintenanceui.h ../mainwindow.h ../personnel.h ../servicemodel.h ../serviceui.h ../skysensewindow.h ../staffdata.h ../stafftraining.h ../staffui.h ../stationui.h
+FORMS += ../skysensewindow.ui
+RESOURCES += ../resources.qrc
