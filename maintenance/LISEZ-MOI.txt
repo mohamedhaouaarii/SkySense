@@ -1,0 +1,28 @@
+SkySense — Maintenance
+=====================
+
+This Qt Widgets module uses the Qt 6.7.3 MinGW 64-bit kit and qmake. Open
+SkySense.pro in this directory from Qt Creator. The Equipment project at the
+repository root is a separate project and remains unchanged.
+
+Oracle setup
+------------
+
+1. Configure a 64-bit ODBC data source named SKYSENSE for
+   localhost:1521/XEPDB1.
+2. Connect to Oracle as SKYSENSE and run maintenance_schema.sql once.
+3. Set SKYSENSE_DB_PASSWORD in the local environment, or enter the password
+   when the application prompts. The password is never stored in project files
+   or Qt settings. SKYSENSE_DB_DSN and SKYSENSE_DB_USER can override the
+   default data source and user.
+4. Launch SkySense. The application loads interventions from
+   MAINTENANCE_INTERVENTION; add, edit, delete, completion, notes, and actions
+   are saved through the Oracle model.
+
+Use --skip-oracle to open temporary sample data without an Oracle connection.
+Preview changes exist only in memory. If Oracle connects but the maintenance
+schema is missing, the page explains how to install it and prevents writes.
+
+The interface also includes search, filters, sorting, PDF export, statistics,
+explainable scheduling, and preventive-maintenance suggestions. See README.md
+for the feature summary.

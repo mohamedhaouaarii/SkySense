@@ -1,0 +1,35 @@
+# Qt Creator and IDE state
+*.user
+*.user.*
+*.pro.user*
+*.autosave
+.qtcreator/
+.qtc_clangd/
+.cache/
+.vs/
+
+# qmake and compiler output
+build/
+build-*/
+debug/
+release/
+Makefile*
+.qmake.stash
+*.o
+*.obj
+*.exe
+*.dll
+*.a
+*.lib
+*.pdb
+*.ilk
+moc_*.cpp
+moc_*.h
+ui_*.h
+qrc_*.cpp
+target_wrapper.*
+
+# Local credentials and configuration
+.env
+.env.*
+!.env.example
