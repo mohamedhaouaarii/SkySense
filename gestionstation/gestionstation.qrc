@@ -1,0 +1,17 @@
+<RCC>
+ <qresource prefix="/gestionstation">
+  <file>styles/station.qss</file>
+  <file>assets/logo/skysense_logo.png</file>
+  <file>assets/backgrounds/login_background.png</file>
+  <file>assets/sounds/button_click.wav</file>
+  <file>assets/stations/network_map.png</file>
+  <file>assets/stations/station_01.png</file>
+  <file>assets/stations/station_02.png</file>
+  <file>assets/stations/station_03.png</file>
+  <file>assets/stations/station_04.png</file>
+  <file>assets/stations/station_05.png</file>
+  <file>assets/stations/station_06.png</file>
+  <file>assets/stations/station_07.png</file>
+  <file>assets/stations/station_08.png</file>
+ </qresource>
+</RCC>
