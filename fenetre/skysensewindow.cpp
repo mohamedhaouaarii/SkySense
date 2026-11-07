@@ -5,6 +5,7 @@
 #include "ui_skysensewindow.h"
 #include "equipmentui.h"
 #include "stationui.h"
+#include "maintenanceui.h"
 #include "sidebar.h"
 #include "appsession.h"
 #include "compte.h"
@@ -430,17 +431,19 @@ void SkySenseWindow::setupLoginUi()
     modulePages->setMinimumSize(0, 0);
     QVector<QWidget *> restrictedOverlays;
     QVector<QGraphicsBlurEffect *> moduleBlurEffects;
-    // Version integree : connexion, tableau de bord, gestion des stations et gestion des equipements.
-    // Integration d'une autre gestion : creer sa page, l'ajouter a moduleNames et au if ci-dessous.
+    // Les pages des gestions utilisent la meme fenetre, session et connexion Oracle.
     auto *stationPage = new QWidget;
     setupStationUi(stationPage);
     auto *equipmentPage = new QWidget;
     setupEquipmentUi(equipmentPage);
-    const QStringList moduleNames{"Dashboard", "Stations", "Equipment"};
+    auto *maintenancePage = new QWidget;
+    setupMaintenanceContent(maintenancePage);
+    const QStringList moduleNames{"Dashboard", "Stations", "Equipment", "Maintenance"};
     for (const QString &name : moduleNames) {
         QWidget *module = nullptr;
         if (name == "Stations") module = stationPage;
         else if (name == "Equipment") module = equipmentPage;
+        else if (name == "Maintenance") module = maintenancePage;
         else {
             module = new DashboardPage([this, modulePages, moduleNames](const QString &target) {
                 const int destination = moduleNames.indexOf(target);
@@ -644,12 +647,14 @@ void SkySenseWindow::setupLoginUi()
     const QVector<QLineEdit *> moduleSearches{
         nullptr,
         stationPage->findChild<QLineEdit *>("globalStationSearch"),
-        equipmentPage->findChild<QLineEdit *>("globalEquipmentSearch")
+        equipmentPage->findChild<QLineEdit *>("globalEquipmentSearch"),
+        maintenancePage->findChild<QLineEdit *>("maintenanceGlobalSearch")
     };
     const QStringList searchPrompts{
         "Search a station, equipment or open a module...",
         "Search for a station, city, or region...",
-        "Search equipment by ID, type, model or serial number..."
+        "Search equipment by ID, type, model or serial number...",
+        "Search maintenance by code, title, technician or status..."
     };
     auto syncHeader = [modulePages, moduleSearches, searchPrompts, sharedSearch] {
         const int index = modulePages->currentIndex();
@@ -762,8 +767,8 @@ void SkySenseWindow::setupLoginUi()
     // Les acces des responsables se donnent dans la gestion Staff (section "Access"), integree a part.
     connect(manageManagers, &QAction::triggered, this, [this]() {
         QMessageBox::information(this, "Manage managers",
-                                 "Manager accounts are given from the Staff module (\"Access\" section), "
-                                 "which is added during integration. Existing accounts already sign in here.");
+                                 "Manager accounts are assigned from the Staff module's Access section. "
+                                 "The Staff module is not included in this project bundle; existing Oracle accounts can still sign in here.");
     });
     connect(headerSignOut, &QAction::triggered, this, [this, profileMenu, performSignOut]() {
         profileMenu->close();

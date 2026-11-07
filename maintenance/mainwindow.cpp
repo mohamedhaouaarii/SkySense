@@ -444,6 +444,8 @@ private:
         else if (!oracleMode && dPE->dateTime() < dPS->dateTime()) err = "The planned end must be at or after the planned start.";
         else if (!oracleMode && s == "Completed" && dRE->dateTime() < dRS->dateTime()) err = "The actual end must be at or after the actual start.";
         else if (s == "Completed" && eRep->toPlainText().trimmed().isEmpty()) err = "A work report is required to complete an intervention.";
+        else if (s == "Completed" && dRE->dateTime() > QDateTime::currentDateTime().addSecs(60)) err = "The completion date cannot be in the future.";
+        else if (eRep->toPlainText().trimmed().size() > 3900 || eDesc->text().trimmed().size() > 500) err = "The description or work report is too long.";
         if (!err.isEmpty()) { showMessage(this, QMessageBox::Warning, "Review required", err); return false; }
         return true;
     }

@@ -9,12 +9,12 @@ TARGET = SkySense
 
 contains(CONFIG, skysense_tests): DEFINES += SKYSENSE_UI_TESTS
 
-# Version integree : Connexion + Tableau de bord + Stations + Equipement.
+# Version integree : Connexion + Tableau de bord + Stations + Equipement + Maintenance.
 # Architecture Modele-Vue de l'atelier CRUD : un dossier par gestion.
 #   Modele : classe purement C++ (attributs, constructeurs, getters/setters, requetes preparees).
 #   Vue    : widgets ; aucune requete SQL, appels via l'objet du modele.
 # Integration : voir INTEGRATION.md.
-INCLUDEPATH += commun fenetre dashboard equipement station compte
+INCLUDEPATH += commun fenetre dashboard equipement station compte maintenance
 
 SOURCES += main.cpp
 
@@ -42,5 +42,9 @@ HEADERS += equipement/equipement.h equipement/equipmentdata.h equipement/equipme
 # Gestion des stations (CRUD complet, exports PDF) - meme connexion Oracle, meme fenetre, meme en-tete
 SOURCES += station/stationdata.cpp station/stationui.cpp
 HEADERS += station/stationdata.h station/stationui.h
+
+# Gestion Maintenance (module repense pour les tables Oracle MAINTENANCE + REALISER)
+SOURCES += maintenance/maintenancemodel.cpp maintenance/mainwindow.cpp maintenance/maintenanceui.cpp
+HEADERS += maintenance/intervention.h maintenance/maintenancemodel.h maintenance/mainwindow.h maintenance/maintenanceui.h
 
 RESOURCES += resources.qrc
