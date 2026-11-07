@@ -101,28 +101,24 @@ bool replaceTechnicians(const QSqlDatabase &db, const Intervention &item, QStrin
     if (ids.isEmpty())
         return true;
 
+    // These IDs are validated integers from Oracle. Passing NUMBER keys as
+    // decimal literals avoids the QODBC bound-key failure seen in this module.
+    const QString maintenanceId = QString::number(item.databaseId);
     QSqlQuery remove(db);
-    if (!remove.prepare(QStringLiteral("DELETE FROM REALISER WHERE ID_MAINTENANCE = ?"))) {
-        setSqlError(error, remove);
+    if (!remove.exec(QStringLiteral("DELETE FROM REALISER WHERE ID_MAINTENANCE = %1")
+                         .arg(maintenanceId))) {
+        setSqlError(error, remove, QStringLiteral("Could not replace technician assignments in REALISER."));
         return false;
     }
-    remove.addBindValue(item.databaseId);
-    if (!remove.exec()) {
-        setSqlError(error, remove);
-        return false;
-    }
+    remove.finish();
 
     QSqlQuery insert(db);
-    if (!insert.prepare(QStringLiteral(
-            "INSERT INTO REALISER (ID_PERSONNEL, ID_MAINTENANCE) VALUES (?, ?)"))) {
-        setSqlError(error, insert);
-        return false;
-    }
     for (int technicianId : ids) {
-        insert.bindValue(0, technicianId);
-        insert.bindValue(1, item.databaseId);
-        if (!insert.exec()) {
-            setSqlError(error, insert);
+        const QString sql = QStringLiteral(
+                                "INSERT INTO REALISER (ID_PERSONNEL, ID_MAINTENANCE) VALUES (%1, %2)")
+                                .arg(QString::number(technicianId), maintenanceId);
+        if (!insert.exec(sql)) {
+            setSqlError(error, insert, QStringLiteral("Could not assign technician %1 in REALISER.").arg(technicianId));
             return false;
         }
     }
@@ -256,14 +252,14 @@ bool MaintenanceModel::insert(Intervention &item, QString *error) const
     // Locking this low-volume table makes MAX(ID)+1 safe across concurrent adds.
     QSqlQuery lock(db);
     if (!lock.exec(QStringLiteral("LOCK TABLE MAINTENANCE IN EXCLUSIVE MODE"))) {
-        setSqlError(error, lock);
+        setSqlError(error, lock, QStringLiteral("Could not lock MAINTENANCE to allocate an intervention ID."));
         db.rollback();
         return false;
     }
     QSqlQuery nextId(db);
     if (!nextId.exec(QStringLiteral(
             "SELECT NVL(MAX(ID_MAINTENANCE), 0) + 1 FROM MAINTENANCE")) || !nextId.next()) {
-        setSqlError(error, nextId);
+        setSqlError(error, nextId, QStringLiteral("Could not allocate the next MAINTENANCE ID."));
         db.rollback();
         return false;
     }
@@ -275,18 +271,19 @@ bool MaintenanceModel::insert(Intervention &item, QString *error) const
     item.technicianIds = technicians;
 
     QSqlQuery query(db);
-    if (!query.prepare(QStringLiteral(
+    const QString insertSql = QStringLiteral(
             "INSERT INTO MAINTENANCE (ID_MAINTENANCE, CODE, TITRE, DATE_PREVUE, DATE_REALISEE, "
             "PRIORITE, STATUT, DESCRIPTION, COMPTE_RENDU) VALUES "
-            "(:id, :code, :title, :planned, :realised, :priority, :status, :description, :report)"))) {
-        setSqlError(error, query);
+            "(%1, :code, :title, :planned, :realised, :priority, :status, :description, :report)")
+                                  .arg(QString::number(item.databaseId));
+    if (!query.prepare(insertSql)) {
+        setSqlError(error, query, QStringLiteral("Could not prepare the MAINTENANCE insert."));
         db.rollback();
         return false;
     }
-    query.bindValue(QStringLiteral(":id"), item.databaseId);
     writeMaintenanceFields(query, item);
     if (!query.exec()) {
-        setSqlError(error, query);
+        setSqlError(error, query, QStringLiteral("Could not insert the intervention into MAINTENANCE."));
         db.rollback();
         return false;
     }
@@ -295,8 +292,7 @@ bool MaintenanceModel::insert(Intervention &item, QString *error) const
         return false;
     }
     if (!db.commit()) {
-        if (error)
-            *error = db.lastError().text();
+        setDatabaseError(error, db, QStringLiteral("Oracle could not commit the new intervention."));
         db.rollback();
         return false;
     }
@@ -325,15 +321,14 @@ bool MaintenanceModel::update(const Intervention &item, QString *error) const
             "UPDATE MAINTENANCE SET CODE = :code, TITRE = :title, DATE_PREVUE = :planned, "
             "DATE_REALISEE = :realised, PRIORITE = :priority, STATUT = :status, "
             "DESCRIPTION = :description, COMPTE_RENDU = :report "
-            "WHERE ID_MAINTENANCE = :id"))) {
-        setSqlError(error, query);
+            "WHERE ID_MAINTENANCE = %1").arg(QString::number(item.databaseId)))) {
+        setSqlError(error, query, QStringLiteral("Could not prepare the MAINTENANCE update."));
         db.rollback();
         return false;
     }
     writeMaintenanceFields(query, item);
-    query.bindValue(QStringLiteral(":id"), item.databaseId);
     if (!query.exec()) {
-        setSqlError(error, query);
+        setSqlError(error, query, QStringLiteral("Could not update the intervention in MAINTENANCE."));
         db.rollback();
         return false;
     }
@@ -348,8 +343,7 @@ bool MaintenanceModel::update(const Intervention &item, QString *error) const
         return false;
     }
     if (!db.commit()) {
-        if (error)
-            *error = db.lastError().text();
+        setDatabaseError(error, db, QStringLiteral("Oracle could not commit the intervention update."));
         db.rollback();
         return false;
     }
