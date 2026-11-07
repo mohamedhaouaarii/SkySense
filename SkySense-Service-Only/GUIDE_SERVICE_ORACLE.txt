@@ -1,0 +1,49 @@
+SKYSENSE - SERVICE MODULE WITH ORACLE (ODBC)
+=============================================
+
+What was changed (Service only)
+  * servicemodel.h / servicemodel.cpp  (NEW)  all SQL for Services: loadAll, insert, update, remove
+  * serviceui.cpp   the Add / Edit / Delete buttons now call the model;
+                    the list is loaded from Oracle at start-up
+  * SkySense.pro    the two new files are registered
+  * service_sqlplus.sql  (NEW)  creates the table if missing + check queries
+Nothing else (Stations, Equipment, Staff, Maintenance) was modified.
+
+Table used: SKYSENSE_SERVICES (same one as other_modules_schema.sql)
+
+Steps
+  1. SQL*Plus:   sqlplus SKYSENSE/sky123@localhost:1521/XEPDB1
+                 SQL> @service_sqlplus.sql
+  2. Qt Creator: open SkySense.pro, Build > Rebuild Project (needed: new files), Run.
+  3. In the Services page:
+       Add Service        -> INSERT
+       tick a row + Edit  -> UPDATE   (the Delete button inside the Edit form -> DELETE)
+       tick a row + Delete-> DELETE
+  4. In SQL*Plus:  SELECT SERVICE_ID, TITLE, STATUS FROM SKYSENSE_SERVICES ORDER BY SERVICE_ID;
+
+If something fails, the app shows the Oracle error in a message box and the
+screen is NOT changed (so screen and database always match).
+With --skip-oracle the list shows demo rows and saving is refused (no connection).
+
+Atelier follow-up (what was added)
+  * servicemodel: validate() = controle de saisie in C++ (called by insert and update before any SQL)
+  * service_sqlplus.sql: database constraints (title not empty, priority, status). Run the script again once.
+
+Teacher's remarks (latest changes)
+  * The service ID is no longer shown in the application (no ID box in Add/Edit, no ID column,
+    not in the PDF / export list). It is generated automatically (SRV-001, SRV-002 ...) and
+    stays in the database column SERVICE_ID (primary key).
+  * Title is now chosen in a ready-made list (6 services) instead of being typed.
+  * New column PRICE (DT, 3 decimals) in SKYSENSE_SERVICES: the app adds it automatically the
+    first time, or run service_sqlplus.sql once. Add/Edit has a "Price (DT)" box with arrows
+    to increase / decrease, and the table shows a Price column.
+  * Click a service row (anywhere on it): the "Service completion summary" panel under the table
+    shows its details, checklist (done / pending), status, planned duration, price and station.
+    The "View Station" button was removed.
+  * Export PDF now asks "Which module will receive this PDF?" (one PDF = one module):
+      - Services management : full report (all columns, price, total cost)
+      - Staff               : sorted by assignee -> who is assigned to which service, when; workload per person
+      - Maintenance         : by date -> station, schedule, priority, tasks done, PRICE; total / remaining cost
+      - Stations            : by station -> services per station, assignee, status; stations with overdue services
+  * New innovative function I1 (Cost control): Statistics > "Cost Analysis" shows the total and average cost,
+    the cost by service type and by month, and flags services priced more than 50% above the average of their type.
