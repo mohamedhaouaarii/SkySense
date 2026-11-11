@@ -1,6 +1,14 @@
-# SkySense - version integree avec Staff Oracle
+# SkySense — projet complet intégré avec le module Staff
 
-La version integree utilisee et verifiee par Donia se trouve dans
+La branche `gestion-staff` réunit le travail de Meriem et le module Staff de Donia dans une application Qt. Dashboard, Stations, Equipment, Maintenance, Staff et Services partagent la même fenêtre et la même session. Le module Staff regroupe le CRUD du personnel, la gestion des accès, la disponibilité et les alertes de sous-effectif.
+
+**Ouvrir [SkySense-Meriem-Staff/SkySense.pro](SkySense-Meriem-Staff/SkySense.pro) dans Qt Creator** avec le kit Desktop Qt 6.7.3 MinGW 64 bits. Le projet utilise la source ODBC `SKYSENSE` et le schéma Oracle `SKYSENSE_MERIEM_STAFF`. [Installation et tests](SkySense-Meriem-Staff/README.md)
+
+Les tests d'intégration ont confirmé le CRUD du personnel, les droits d'accès et la navigation entre les six modules. Le test d'ajout d'une intervention Maintenance a renvoyé une erreur QODBC.
+
+## Version précédente du projet intégré
+
+La version précédente se trouve dans
 [`SkySense-Integrated/`](SkySense-Integrated/).
 
 **Projet a ouvrir dans Qt Creator :
@@ -23,7 +31,7 @@ un autre poste; les fichiers internes de la base locale ne font pas partie du de
 
 Les dossiers historiques restent disponibles : le projet a la racine correspond
 aux anciennes instructions Equipment ci-dessous, et `staff/` a la version Staff
-precedente. Pour le travail integre actuel, utiliser le projet indique ci-dessus.
+precedente. Pour le travail intégré actuel, ouvrir le projet SkySense-Meriem-Staff indiqué en haut de cette page.
 
 ---
 

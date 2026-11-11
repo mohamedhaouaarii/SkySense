@@ -1,0 +1,15 @@
+build/
+build-*/
+debug/
+release/
+*.pro.user*
+*.qmake.stash
+Makefile*
+*.o
+*.obj
+*.exe
+*.dll
+.env
+.qtcreator/
+*.user
+*.user.*

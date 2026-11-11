@@ -1,0 +1,30 @@
+* { font-family:"Segoe UI";font-size:14px;color:#252444; }
+QLabel {background:transparent;border:none;}
+QFrame[card="panel"] {background:#ffffff;border:1px solid #dedfee;border-radius:18px;}
+QFrame[card="section"] {background:#fcfcff;border:1px solid #e4e3f1;border-radius:12px;}
+QFrame[card="metric"] {background:#fdfcff;border:1px solid #e1dfef;border-radius:14px;}
+QLabel[type="avatar"] {font-size:28px;font-weight:700;color:#403394;background:#e8e3ff;border:2px solid #d8cdfb;border-radius:35px;}
+QLabel[type="section"],QLabel[type="profileName"] {font-size:21px;font-weight:700;color:#191737;}
+QLabel[type="subheading"] {font-size:15px;font-weight:700;color:#292343;}
+QLabel[type="function"] {font-size:14px;color:#413c5e;}
+QLabel[type="muted"],QLabel[type="contact"] {font-size:12px;color:#66647c;}
+QLabel[type="value"] {font-size:12px;font-weight:600;color:#302d48;}
+QLabel[type="day"] {font-size:11px;}
+QPushButton {min-height:28px;padding:0 11px;border-radius:7px;border:1px solid #dedceb;background:#ffffff;color:#403859;}
+QPushButton:hover {background:#f0edfc;border-color:#bcb4e9;}
+QPushButton:focus {border:1px solid #7163c8;}
+QPushButton:disabled {color:#918fa1;background:#f5f4fa;border-color:#e7e5f0;}
+QPushButton[primary="true"],QPushButton[tab="true"][active="true"] {color:white;background:#5744b6;border:1px solid #5642ae;}
+QPushButton[primary="true"]:hover {background:#48359e;}
+QPushButton[tab="true"] {min-height:30px;padding:0 7px;background:#f4f3fa;border:1px solid #eceaf5;color:#47425f;font-size:12px;}
+QPushButton[danger="true"] {color:#a53b57;}
+QPushButton[small="true"] {font-size:12px;padding:0 7px;}
+QLineEdit,QComboBox,QSpinBox,QDateEdit {min-height:28px;background:white;border:1px solid #dedaed;border-radius:7px;padding:0 8px;color:#302d4e;}
+QLineEdit:focus,QComboBox:focus,QSpinBox:focus,QDateEdit:focus {border:1px solid #8173d2;}
+QComboBox QAbstractItemView {background:white;color:#252440;selection-background-color:#e8e4fb;selection-color:#382e81;}
+QTableWidget {background:#fff;border:0;outline:none;selection-background-color:#eeeaff;selection-color:#262043;}
+QHeaderView {background:transparent;}
+QCheckBox {spacing:6px;font-size:12px;}
+QDialog {background:#f7f6fc;}
+QScrollBar:vertical {width:9px;background:#f4f2fa;}
+QScrollBar::handle:vertical {background:#ccc6df;min-height:20px;border-radius:4px;}
