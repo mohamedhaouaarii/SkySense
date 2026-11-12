@@ -1,3 +1,4 @@
+#include "appsession.h"
 #include "staffdata.h"
 #include "stafftraining.h"
 #include <QDir>
@@ -15,6 +16,7 @@
 
 namespace Staff {
 QString operatorName() {
+    if (AppSession::active()) return AppSession::displayName();
     QString user = qEnvironmentVariable("USERNAME");
     if (user.isEmpty()) user = qEnvironmentVariable("USER");
     return user.isEmpty() ? QStringLiteral("Local operator") : user;
@@ -190,10 +192,6 @@ QByteArray encode(const State &state, int revision) {
 }
 
 Store::Store(QString path) : filePath(std::move(path)) {}
-bool validateState(const State &state,QString &error) {
-    State checked;
-    return decode(encode(state,qMax(1,state.revision)),checked,error);
-}
 bool Store::exists() const { return QFile::exists(filePath); }
 bool Store::load(State &state, QString &error) const {
     error.clear();

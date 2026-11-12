@@ -1,18 +1,15 @@
-# Qt Creator user settings
-*.user
-*.user.*
-
-# qmake and compiler output
-/build/
-/build-*/
-/debug/
-/release/
-Makefile
-Makefile.*
+build/
+build-*/
+debug/
+release/
+*.pro.user*
+*.qmake.stash
+Makefile*
 *.o
 *.obj
 *.exe
-moc_*.cpp
-moc_*.h
-ui_*.h
-qrc_*.cpp
+*.dll
+.env
+.qtcreator/
+*.user
+*.user.*
